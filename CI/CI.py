@@ -112,6 +112,8 @@ if __name__ == '__main__':
     betas  = np.array([1, 1, 0, 0, 0, 1])
     occ = np.array([alphas, betas])
     ref = Bra(occ)
+    ref2 = ref.annihilate(5,1).create(2,1)
     print(ref)
-    print(Hone(ref, ref))
+    print(ref2)
+    print(Hone(ref, ref2))
 
