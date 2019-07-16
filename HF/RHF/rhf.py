@@ -99,6 +99,7 @@ class RHF:
             if abs(E1 - E0) < self.e_convergence:
                 psi4.core.print_out('\nSCF has converged!! ' + viva + '\n')
                 psi4.core.print_out('\nFinal RHF Energy: {:<15.10f} '.format(E1) + pleft + '\n')
+                self.orbitals = C
                 break
             else:
                 E0 = E1
