@@ -1,119 +1,101 @@
 import psi4
 import numpy as np
 import scipy.linalg as la
+import os
+import sys
 
-# Emojis. Very important stuff
+file_dir = os.path.dirname('../Aux/')
+sys.path.append(file_dir)
 
-viva = b'\xF0\x9F\x8E\x89'.decode('utf-8')
-eyes = b'\xF0\x9F\x91\x80'.decode('utf-8')
-cycle = b'\xF0\x9F\x94\x83'.decode('utf-8')
-crying = b'\xF0\x9F\x98\xAD'.decode('utf-8')
-pleft = b'\xF0\x9F\x91\x88'.decode('utf-8')
+file_dir = os.path.dirname('../HF/RHF/')
+sys.path.append(file_dir)
 
-# Auxiliar functions, useful for debugging and such
+from tools import *
+from fock import *
+from rhf import RHF
 
+# Function to produce elements of the 1e Hamiltonian matrix a given pair of bras: BRUTE FORCE APPROACH
 
-# Clean up numerical zeros
-
-def chop(number):
-    if abs(number) < 1e-12:
-        return 0
-    else:
-        return number
-
-# Print a pretty matrix
-
-def pretty(inp):
-    Mat = inp.tolist()
-    out = ''
-    for row in Mat:
-        for x in row:
-            out += ' {:^ 10.7f}'.format(chop(x))
-        out += '\n'
-    return out
-
-# Create a class of states. These will store strings with orbital ocupations and support operations such as
-# annihilation, creation
-
-class Bra:
-
-    def __init__(self, occupancy, phase=1):
-        self.occ = occupancy
-        self.p = phase
-
-    def __str__(self):
-        out = 'Phase: {} \n'.format(self.p)
-        out += 'Alpha:'
-        for a in self.occ[0]:
-            out += ' {}'.format(a)
-        out += '\n'    
-        out += 'Beta: '
-        for b in self.occ[1]:
-            out += ' {}'.format(b)
-        return out
-
-    def __eq__(self, other):
-        return np.array_equal(self.occ, other.occ)
-
-   # Function to return another Bra object with an orbital annihilated 
-
-    def annihilate(self, orb, spin):    # Spin = 0 => Alpha Spin = 1 => Beta
-        if self.occ[spin, orb] == 0:
-            return Bra(self.occ, phase = 0)
-        else:
-            new_occ = self.occ.copy()
-            new_occ[spin, orb] = 0
-            f = self.occ[spin][:orb].sum()
-            if spin == 0:
-                new_p = self.p * (-1)**(f)
-            else:
-                new_p = self.p * (-1)**(f+ self.occ[spin].sum())
-            return Bra(new_occ, phase = new_p)
-
-   # Function to return another Bra object with a new orbital created
-
-    def create(self, orb, spin):    # Spin = 0 => Alpha Spin = 1 => Beta
-        if self.occ[spin, orb] == 1:
-            return Bra(self.occ, phase = 0)
-        else:
-            new_occ = self.occ.copy()
-            new_occ[spin, orb] = 1
-            f = self.occ[spin][:orb].sum()
-            if spin == 0:
-                new_p = self.p * (-1)**(f)
-            else:
-                new_p = self.p * (-1)**(f+ self.occ[spin].sum())
-            return Bra(new_occ, phase = new_p)
-
-# Compute the overlap of two bras
-
-def overlap(bra1, bra2):
-    if bra1 == bra2:
-        return bra1.p*bra2.p
-    else:
-        return 0
-
-# Function to produce elements of the 1e Hamiltonian matrix a given pair of bras
-
-def Hone(bra1, bra2):
-    r = range(len(bra1.occ[0]))
+def BF_Hone(bra1, bra2, molint):
+    N = range(len(bra1.occ[0]))
     out = 0
-    for o1 in r:
-        for o2 in r:
-            hold1 = overlap(bra1.annihilate(o1,0), bra2.annihilate(o2,0))
-            hold2 = overlap(bra1.annihilate(o1,1), bra2.annihilate(o2,1))
-            out += hold1 + hold2
-            if hold1+hold2 != 0:
-                print('Non zero for {} and {} soma {}'.format(o1, o2, hold1+hold2))
+    for p in N:
+        for q in N:
+            h1 = overlap(bra1.an(p,0), bra2.an(q,0))
+            h2 = overlap(bra1.an(p,1), bra2.an(q,1))
+            out += (h1 + h2)*molint[p,q]
     return out
+
+def BF_Htwo(bra1, bra2, molint):
+    N = range(len(bra1.occ[0]))
+    out = 0
+    for p in N:
+        for q in N:
+            for r in N:
+                for s in N:
+                    h1 = 0.5*overlap(bra1.an(p,0).cr(q,0), bra2.an(s,0).cr(r,0))
+                    h2 = 0.5*overlap(bra1.an(p,0).cr(q,0), bra2.an(s,1).cr(r,1))
+                    h3 = 0.5*overlap(bra1.an(p,1).cr(q,1), bra2.an(s,0).cr(r,0))
+                    h4 = 0.5*overlap(bra1.an(p,1).cr(q,1), bra2.an(s,1).cr(r,1))
+                    if q == r:
+                        h5 = 0.5*overlap(bra1.an(p,0), bra2.an(s,0))
+                        h6 = 0.5*overlap(bra1.an(p,1), bra2.an(s,1))
+                    else:
+                        h5 = 0
+                        h6 = 0
+                    total = h1 + h2 + h3 + h4 - h5 - h6 
+                    out += total*molint[p,q,r,s]
+    return out
+
+def SR_Hone(bra1, bra2, molint):
+    out = 0
+    dif = bra1 - bra2
+    if int(dif) == 0:
+        for orb in np.where(bra1.occ[0] == 1)[0]:
+            out += molint[orb, orb]
+        for orb in np.where(bra1.occ[1] == 1)[0]:
+            out += molint[orb, orb]
+        return out*bra1.p * bra2.p
+    if int(dif) == 2:
+        nalpha = dif.occ[0].sum()
+        if nalpha == 0:
+            orbs = np.where(dif.occ[1] == 1)[0]
+            out += molint[orbs[0], orbs[1]]
+            return out*bra1.p*bra2.p
+        if nalpha == 2:
+            orbs = np.where(dif.occ[0] == 1)[0]
+            out += molint[orbs[0], orbs[1]]
+            return out*bra1.p*bra2.p
+        else:
+            return 0
+    else:
+        return 0
+            
+class CI:
+    
+# Pull in Hartree-Fock data, including integrals
+
+    def __init__(self, HF):
+        self.orbitals = HF.orbitals
+        self.ndocc = HF.ndocc
+        self.nelec = HF.nelec
+        self.nbf = HF.nbf
+        self.V_nuc = HF.V_nuc
+        self.h = HF.T + HF.V
+        self.g = HF.g.swapaxes(1,2)
+        self.S = HF.S
+
+# Convert atomic integrals to MO integrals
+        self.MIone = np.einsum('up,vq,uv->pq', self.orbitals, self.orbitals, self.h)
+        self.MItwo = np.einsum('up,vq,hr,zs,uvhz->pqrs', self.orbitals, self.orbitals, self.orbitals, self.orbitals,self.g)
 
 if __name__ == '__main__':
-    alphas = np.array([1, 1, 1, 0, 0, 0])
-    betas  = np.array([1, 1, 0, 0, 0, 1])
+    alphas = np.array([1, 0, 1, 0, 0, 0])
+    betas  = np.array([1, 1, 0, 0, 0, 0])
     occ = np.array([alphas, betas])
     ref = Bra(occ)
-    ref2 = ref.annihilate(5,1).create(2,1)
+    ref2 = ref.an(1,1).cr(2,1)
     print(ref)
-    print(ref2)
-    print(Hone(ref, ref2))
+    print(BF_Hone(ref, ref))
+    print(BF_Htwo(ref, ref))
 

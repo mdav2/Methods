@@ -32,6 +32,4 @@ mints = psi4.core.MintsHelper(basis)
 from rhf import RHF
 rhf = RHF(mol, mints)
 
-E = rhf.compute_energy()
-
 psi4.core.print_out('Psi4 RHF Energy:  {:<5.10f}\n'.format(psiE))

@@ -1,36 +1,13 @@
 import psi4
 import numpy as np
 import scipy.linalg as la
+import os
+import sys
 
-# Emojis. Very important stuff
+file_dir = os.path.dirname('../../Aux/')
+sys.path.append(file_dir)
 
-viva = b'\xF0\x9F\x8E\x89'.decode('utf-8')
-eyes = b'\xF0\x9F\x91\x80'.decode('utf-8')
-cycle = b'\xF0\x9F\x94\x83'.decode('utf-8')
-crying = b'\xF0\x9F\x98\xAD'.decode('utf-8')
-pleft = b'\xF0\x9F\x91\x88'.decode('utf-8')
-
-# Auxiliar functions, useful for debugging and such
-
-
-# Clean up numerical zeros
-
-def chop(number):
-    if abs(number) < 1e-12:
-        return 0
-    else:
-        return number
-
-# Print a pretty matrix
-
-def pretty(inp):
-    Mat = inp.tolist()
-    out = ''
-    for row in Mat:
-        for x in row:
-            out += ' {:^ 10.7f}'.format(chop(x))
-        out += '\n'
-    return out
+from tools import *
 
 class RHF:
     """
@@ -68,8 +45,10 @@ class RHF:
         self.nbf = mints.basisset().nbf()
         # vu is the matrix of 2 electrons integrals [g(ijkl)] times the density matrix [D(jl)] contracted into vu(ik). Since the guess is D = 0, vu starts as 0
         self.vu = np.matrix(np.zeros((self.nbf, self.nbf)))
+        
+        self.compute_energy()
     
-    def compute_energy(self, out = 'None'):
+    def compute_energy(self):
         """
         Compute the rhf energy
         :return: energy
@@ -81,7 +60,7 @@ class RHF:
  
         # Just printing pretty stuff
         psi4.core.print_out('-'*50 + '\n')
-        psi4.core.print_out('{:^50s}'.format('Beginning SCF iterations ' + cycle) + '\n')
+        psi4.core.print_out('{:^50s}'.format('Beginning SCF iterations ' + emoji("cycle")) + '\n')
         psi4.core.print_out('-'*50 + '\n')
         psi4.core.print_out('{:^10s}   {:^15s}   {:^15s}\n'.format('Iteration', 'Energy', 'Energy Diff'))
 
@@ -97,14 +76,12 @@ class RHF:
             E1 = np.sum((2 * np.array(h) + np.array(self.vu))*np.array(D.T)) + self.V_nuc
             psi4.core.print_out('{:^10d}   {:<15.10f}   {:>15.10f}\n'.format(count, E1, E1-E0))
             if abs(E1 - E0) < self.e_convergence:
-                psi4.core.print_out('\nSCF has converged!! ' + viva + '\n')
-                psi4.core.print_out('\nFinal RHF Energy: {:<15.10f} '.format(E1) + pleft + '\n')
+                psi4.core.print_out('\nSCF has converged!! ' + emoji("viva") + '\n')
+                psi4.core.print_out('\nFinal RHF Energy: {:<15.10f} '.format(E1) + emoji("pleft") + '\n')
                 self.orbitals = C
+                self.E = E1
                 break
             else:
                 E0 = E1
         else:
             psi4.core.print_out('\n SCF did not converge ' + crying + '\n')
-
-        if out == 'Density':
-            print(pretty(D))
