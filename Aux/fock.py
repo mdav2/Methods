@@ -12,6 +12,8 @@ class Bra:
         self.occ = occupancy
         self.p = phase
 
+# Printing a bra will return its alpha and beta strings
+
     def __str__(self):
         out = 'Phase: {} \n'.format(self.p)
         out += 'Alpha:'
@@ -23,18 +25,26 @@ class Bra:
             out += ' {}'.format(b)
         return out
 
+# When two bras are compared they are considered equal if their strings are the same (occupancies). Phases are not compared
+
     def __eq__(self, other):
         return np.array_equal(self.occ, other.occ)
+
+# Trying to call integer on a bra will return the number of occupied orbitals
 
     def __int__(self):
         return int(self.occ[0].sum() + self.occ[1].sum())
         
+# Subtraction of two bras will produce a new bra where orbitals occupied in both original bras were removed.
+# For exemple A = [0, 1, 1], B = [1, 0, 1]: A - B = [1, 1, 0]
+# Using int(A - B) will tell how different the two bras are
+
     def __sub__(self, other):
         a = abs(self.occ[0] - other.occ[0])
         b = abs(self.occ[1] - other.occ[1])
         return Bra([a, b])
 
-   # Function to return another Bra object with an orbital annihilated 
+# Function to return another Bra object with an orbital annihilated keeping track of the sign.
 
     def an(self, orb, spin):    # Spin = 0 => Alpha Spin = 1 => Beta
         if self.occ[spin, orb] == 0:
@@ -49,7 +59,7 @@ class Bra:
                 new_p = self.p * (-1)**(f+ self.occ[0].sum())
             return Bra(new_occ, phase = new_p)
 
-   # Function to return another Bra object with a new orbital created
+# Function to return another Bra object with a new orbital created, keeping track of the sign
 
     def cr(self, orb, spin):    # Spin = 0 => Alpha Spin = 1 => Beta
         if self.occ[spin, orb] == 1:

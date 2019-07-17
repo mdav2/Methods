@@ -15,10 +15,13 @@ from fock import *
 from rhf import RHF
 
 # Function to produce elements of the 1e Hamiltonian matrix a given pair of bras: BRUTE FORCE APPROACH
+# This function is very inneficient, but is totally based on second quantization, so it should produce the right answer.
+# Since the function overlap is called, there is no need to multiply by phases at the end.
 
 def BF_Hone(bra1, bra2, molint):
     N = range(len(bra1.occ[0]))
     out = 0
+    # Loop thorugh the orbitals and multiply the molecular integral by the phase factor arising from the anh and cre operators
     for p in N:
         for q in N:
             h1 = overlap(bra1.an(p,0), bra2.an(q,0))
@@ -33,6 +36,7 @@ def BF_Htwo(bra1, bra2, molint):
         for q in N:
             for r in N:
                 for s in N:
+                    # Loop thorugh the orbitals and multiply the molecular integral by the phase factor arising from the anh and cre operators
                     h1 = 0.5*overlap(bra1.an(p,0).cr(q,0), bra2.an(s,0).cr(r,0))
                     h2 = 0.5*overlap(bra1.an(p,0).cr(q,0), bra2.an(s,1).cr(r,1))
                     h3 = 0.5*overlap(bra1.an(p,1).cr(q,1), bra2.an(s,0).cr(r,0))
@@ -50,12 +54,23 @@ def BF_Htwo(bra1, bra2, molint):
 def SR_Hone(bra1, bra2, molint):
     out = 0
     dif = bra1 - bra2
+
+    # Use slater rules case 1: Equal determinants. 
+    # Loop thourgh orbitals computing (p|h|p) for alpha p and beta p.
+    # Insert the phase factor that comes with each determinant
+
     if int(dif) == 0:
         for orb in np.where(bra1.occ[0] == 1)[0]:
             out += molint[orb, orb]
         for orb in np.where(bra1.occ[1] == 1)[0]:
             out += molint[orb, orb]
         return out*bra1.p * bra2.p
+
+    # Second case of slater rules. Determinants differ by one pair of MOs
+    # Test if the different MOs have the same spin. If not, return zero. That is if nalpha = 1
+    # Use np.where to locate which are the occupied orbitals. It returns a list of such orbitals. In this case, [p, q]
+    # Compute (p|h|q). Note that, if the determinants are not in maximum coincidence a sign problem may happen
+
     if int(dif) == 2:
         nalpha = dif.occ[0].sum()
         if nalpha == 0:
@@ -68,6 +83,48 @@ def SR_Hone(bra1, bra2, molint):
             return out*bra1.p*bra2.p
         else:
             return 0
+
+    # Third case. Determinants differ in more than two MO. Return zero.
+
+    else:
+        return 0
+
+# This version uses slater rules and second quantization to fix sign problems, but being more effective
+
+def Hone(bra1, bra2, molint):
+    out = 0
+    dif = bra1 - bra2
+
+    # First case. Just apply Slater Rules, this cannot go wrong.
+
+    if int(dif) == 0:
+        for orb in np.where(bra1.occ[0] == 1)[0]:
+            out += molint[orb, orb]
+        for orb in np.where(bra1.occ[1] == 1)[0]:
+            out += molint[orb, orb]
+        return out*bra1.p * bra2.p
+
+    # Second case. We know from Slater rules that only the integral (p|h|q) needs to be elvaluted (p and q are the differente MOs)
+    # We do so, but using second quantization to keep track of the sign. It is simular to the brute force, but in this case we just compute phases factors
+    # For the specific p and q. Note that phase is compute for (p|h|q) and (q|h|p) (p1 and p2) as we sum over all pair within second quant.
+
+    if int(dif) == 2:
+        nalpha = dif.occ[0].sum()
+        if nalpha == 0:
+            orbs = np.where(dif.occ[1] == 1)[0]
+            p1 = overlap(bra1.an(orbs[0],0), bra2.an(orbs[1],0)) + overlap(bra1.an(orbs[0],1), bra2.an(orbs[1],1))
+            p2 = overlap(bra1.an(orbs[1],0), bra2.an(orbs[0],0)) + overlap(bra1.an(orbs[1],1), bra2.an(orbs[0],1))
+            return molint[orbs[0], orbs[1]] * (p1 + p2)
+        if nalpha == 2:
+            orbs = np.where(dif.occ[0] == 1)[0]
+            p1 = overlap(bra1.an(orbs[0],0), bra2.an(orbs[1],0)) + overlap(bra1.an(orbs[0],1), bra2.an(orbs[1],1))
+            p2 = overlap(bra1.an(orbs[1],0), bra2.an(orbs[0],0)) + overlap(bra1.an(orbs[1],1), bra2.an(orbs[0],1))
+            return molint[orbs[0], orbs[1]]* (p1 + p2)
+        else:
+            return 0
+
+    # Third case. Again, just Slater rules, which says this is zero. 
+
     else:
         return 0
             

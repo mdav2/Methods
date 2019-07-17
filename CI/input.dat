@@ -40,12 +40,12 @@ rhf = RHF(mol, mints)
 
 ci = CI(rhf)
 
-alphas = np.array([1, 1, 0, 0, 0, 0, 0])
-betas  = np.array([1, 1, 0, 0, 0, 0, 0])
+alphas = np.array([1, 1, 1, 1, 1, 0, 0])
+betas  = np.array([1, 1, 1, 1, 1, 0, 0])
 occ = np.array([alphas, betas])
 ref = Bra(occ)
-sexc = ref.cr(2,0).an(1,0)
-dexc = sexc.cr(2,1).an(1,1)
+sexc = ref.cr(5,0).an(1,0)
+dexc = sexc.cr(5,1).an(2,1)
 print("Reference")
 print(ref)
 print("Singly Excited")
@@ -61,15 +61,23 @@ print(dexc)
 #
 #print(overlap(x1,x2))
 
+one = sexc
+two = ref
 
-#start = time.process_time()
-H1 = SR_Hone(sexc, sexc, ci.MIone)
-#print("Time for Slater rules: " + str(time.process_time() - start))
-#start = time.process_time()
-H1b = BF_Hone(sexc, sexc, ci.MIone)
-#print("Time for BF 1 elec  :  " + str(time.process_time() - start))
+start = time.process_time()
+H1 = Hone(one, two, ci.MIone)
+tH1 = str(time.process_time()-start)
 
-print("SR value: " + str(H1))
-print("BF value: " + str(H1b))
+start = time.process_time()
+H1s = SR_Hone(one, two, ci.MIone)
+tH1s = str(time.process_time()-start)
+
+start = time.process_time()
+H1b = BF_Hone(one, two, ci.MIone)
+tH1b = str(time.process_time()-start)
+
+print("MX value: {} Time Required: {}".format(H1, tH1))
+print("SR value: {} Time Required: {}".format(H1s, tH1s))
+print("BF value: {} Time Required: {}".format(H1b, tH1b))
 
 psi4.core.print_out('Psi4 RHF Energy:  {:<5.10f}\n'.format(psiE))
