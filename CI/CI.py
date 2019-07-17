@@ -52,7 +52,6 @@ def BF_Htwo(bra1, bra2, molint):
     return out
 
 def SR_Hone(bra1, bra2, molint):
-    out = 0
     dif = bra1 - bra2
 
     # Use slater rules case 1: Equal determinants. 
@@ -60,6 +59,7 @@ def SR_Hone(bra1, bra2, molint):
     # Insert the phase factor that comes with each determinant
 
     if int(dif) == 0:
+        out = 0
         for orb in np.where(bra1.occ[0] == 1)[0]:
             out += molint[orb, orb]
         for orb in np.where(bra1.occ[1] == 1)[0]:
@@ -74,15 +74,19 @@ def SR_Hone(bra1, bra2, molint):
     if int(dif) == 2:
         nalpha = dif.occ[0].sum()
         if nalpha == 0:
-            orbs = np.where(dif.occ[1] == 1)[0]
-            out += molint[orbs[0], orbs[1]]
-            return out*bra1.p*bra2.p
-        if nalpha == 2:
-            orbs = np.where(dif.occ[0] == 1)[0]
-            out += molint[orbs[0], orbs[1]]
-            return out*bra1.p*bra2.p
+            i = 1
+        elif nalpha == 2:
+            i = 0
         else:
             return 0
+        occ_dif = bra1.occ[i] - bra2.occ[i] 
+        o1 = np.where(occ_dif == -1)[0][0]
+        o2 = np.where(occ_dif == 1)[0][0]
+        if o1 < o2:
+            phase = (-1)**bra1.occ[i][o1:o2].sum()
+        else:
+            phase = (-1)**bra1.occ[i][o1:o2:-1].sum()
+        return molint[o1,o2] * phase * bra1.p * bra2.p
 
     # Third case. Determinants differ in more than two MO. Return zero.
 
@@ -137,6 +141,7 @@ class CI:
         self.ndocc = HF.ndocc
         self.nelec = HF.nelec
         self.nbf = HF.nbf
+        print(self.nbf)
         self.V_nuc = HF.V_nuc
         self.h = HF.T + HF.V
         self.g = HF.g.swapaxes(1,2)
