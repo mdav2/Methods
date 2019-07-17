@@ -23,10 +23,13 @@ def chop(number):
 # Print a pretty matrix
 
 def pretty(inp):
-    Mat = inp.tolist()
+    try:
+        Mat = inp.tolist()
+    except:
+        Mat = inp
     out = ''
     for row in Mat:
         for x in row:
-            out += ' {:^ 10.7f}'.format(chop(x))
+            out += ' {:>12.7f}'.format(chop(x))
         out += '\n'
     return out

@@ -9,7 +9,7 @@ import numpy as np
 class Bra:
 
     def __init__(self, occupancy, phase=1):
-        self.occ = occupancy
+        self.occ = np.array(occupancy)
         self.p = phase
 
 # Printing a bra will return its alpha and beta strings

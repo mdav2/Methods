@@ -68,8 +68,9 @@ def SR_Hone(bra1, bra2, molint):
 
     # Second case of slater rules. Determinants differ by one pair of MOs
     # Test if the different MOs have the same spin. If not, return zero. That is if nalpha = 1
-    # Use np.where to locate which are the occupied orbitals. It returns a list of such orbitals. In this case, [p, q]
-    # Compute (p|h|q). Note that, if the determinants are not in maximum coincidence a sign problem may happen
+    # occ_dif should have a -1 and 1. Located the position using np.where. To use Slater rules we would have to
+    # Move the orbital that returned 1 to the position where it returned -1. Thus we need to count how many occupied orbitals are there
+    # In between these two positions to compute the phase.
 
     if int(dif) == 2:
         nalpha = dif.occ[0].sum()
@@ -141,15 +142,50 @@ class CI:
         self.ndocc = HF.ndocc
         self.nelec = HF.nelec
         self.nbf = HF.nbf
-        print(self.nbf)
+        self.virtual = self.nbf - self.ndocc
         self.V_nuc = HF.V_nuc
         self.h = HF.T + HF.V
         self.g = HF.g.swapaxes(1,2)
         self.S = HF.S
 
 # Convert atomic integrals to MO integrals
+        print("Converting atomic integrals to MO integrals...")
         self.MIone = np.einsum('up,vq,uv->pq', self.orbitals, self.orbitals, self.h)
         self.MItwo = np.einsum('up,vq,hr,zs,uvhz->pqrs', self.orbitals, self.orbitals, self.orbitals, self.orbitals,self.g)
+        print("Completed!")
+
+    def compute_CIS(self):
+        print("Starting CIS computation")
+        oc = np.array([1]*self.ndocc + [0]*self.virtual)
+        self.ref = Bra([oc, oc])
+        determinants = [self.ref]
+        print("Generating singly excited states")
+        prog_total = self.virtual*self.ndocc*2
+        prog = 0
+        for i in range(self.ndocc, self.nbf):
+            for a in range(self.ndocc):
+                for s in [0, 1]:
+                    determinants.append(self.ref.an(a, s).cr(i, s))
+                    prog += 1
+                    print("Progress: {:2.0f}%".format(100*prog/prog_total))
+
+        H = []
+        print("Generating Hamiltonian Matrix")
+        prog_total = len(determinants)
+        prog = 0
+        for d1 in determinants:
+            hold = []
+            for d2 in determinants:
+                hold.append(Hone(d1, d2, self.MIone) + BF_Htwo(d1, d2, self.MItwo))
+            H.append(hold)
+            prog += 1
+            print("Progress: {:2.0f}%".format((prog/prog_total)*100))
+            
+        print("Diagonalizing Hamiltonian Matrix")
+        E, C = la.eigh(H)
+        print("Energies:")
+        print(E + self.V_nuc)
+
 
 if __name__ == '__main__':
     alphas = np.array([1, 0, 1, 0, 0, 0])
