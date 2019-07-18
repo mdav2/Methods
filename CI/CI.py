@@ -3,6 +3,7 @@ import numpy as np
 import scipy.linalg as la
 import os
 import sys
+import timeit
 
 file_dir = os.path.dirname('../Aux/')
 sys.path.append(file_dir)
@@ -13,6 +14,8 @@ sys.path.append(file_dir)
 from tools import *
 from fock import *
 from rhf import RHF
+
+### USE A SECOND QUANTIZATION APPROACH TO GET ELEMENTS OF THE HAMILTONIAN MATRIX ###
 
 # Function to produce elements of the 1e Hamiltonian matrix a given pair of bras: BRUTE FORCE APPROACH
 # This function is very inneficient, but is totally based on second quantization, so it should produce the right answer.
@@ -51,20 +54,18 @@ def BF_Htwo(bra1, bra2, molint):
                     out += total*molint[p,q,r,s]
     return out
 
-def SR_Hone(bra1, bra2, molint):
+### FUNCTION: USE SLATER RULES TO GET ELEMENTS OF THE ONE-ELECTRON HAMILTONIAN MATRIX ###
+
+def Hone(bra1, bra2, molint):
     dif = bra1 - bra2
 
     # Use slater rules case 1: Equal determinants. 
-    # Loop thourgh orbitals computing (p|h|p) for alpha p and beta p.
-    # Insert the phase factor that comes with each determinant
-
+    # Sum over the molecular integrals with equal index, but multiply by the occupancy. This way we do not sum unoccipied orbitals.
     if int(dif) == 0:
         out = 0
-        for orb in np.where(bra1.occ[0] == 1)[0]:
-            out += molint[orb, orb]
-        for orb in np.where(bra1.occ[1] == 1)[0]:
-            out += molint[orb, orb]
-        return out*bra1.p * bra2.p
+        A = np.einsum('mm,m->', molint, bra1.occ[0])
+        B = np.einsum('mm,m->', molint, bra1.occ[1])
+        return (A + B) * bra1.p * bra2.p
 
     # Second case of slater rules. Determinants differ by one pair of MOs
     # Test if the different MOs have the same spin. If not, return zero. That is if nalpha = 1
@@ -72,7 +73,7 @@ def SR_Hone(bra1, bra2, molint):
     # Move the orbital that returned 1 to the position where it returned -1. Thus we need to count how many occupied orbitals are there
     # In between these two positions to compute the phase.
 
-    if int(dif) == 2:
+    elif int(dif) == 2:
         nalpha = dif.occ[0].sum()
         if nalpha == 0:
             i = 1
@@ -94,44 +95,52 @@ def SR_Hone(bra1, bra2, molint):
     else:
         return 0
 
-# This version uses slater rules and second quantization to fix sign problems, but being more effective
+### FUNCTION: USE SLATER RULES TO GET ELEMENTS OF THE TWO-ELECTRON HAMILTONIAN MATRIX ###
+# The multiple einsums are used to account for the occupancy with all combinations of alpha and beta M and N orbitals
 
-def Hone(bra1, bra2, molint):
-    out = 0
-    dif = bra1 - bra2
+def Htwo(bra1, bra2, molint):
+   dif = bra1 - bra2
+   if int(dif) == 0:
+       alphas = bra1.occ[0]
+       betas = bra1.occ[1]
+       x1 = np.einsum('mmnn, m, n', molint, alphas, alphas)
+       x2 = np.einsum('mmnn, m, n', molint, betas, betas)
+       x3 = np.einsum('mmnn, m, n', molint, alphas, betas)
+       x4 = np.einsum('mmnn, m, n', molint, betas, alphas)
+       J = x1 + x2 + x3 + x4
+       x1 = np.einsum('mnnm, m, n', molint, alphas, alphas)
+       x2 = np.einsum('mnnm, m, n', molint, betas, betas)
+       K = x1 + x2
+       return 0.5 * bra1.p * bra2.p * (J - K)
 
-    # First case. Just apply Slater Rules, this cannot go wrong.
+   elif int(dif) == 2:
+       nalpha = dif.occ[0].sum()
+       if nalpha == 0:
+           i = 1
+       elif nalpha == 2:
+           i = 0
+           J = np.einsum('mpnn, n->', molint, bra1.occ[0]) + np.einsum('mpnn, n->', molint, bra1.occ[1]) 
+           K = np.einsum('mnnp, n->', molint, bra1.occ[0])
+       else:
+           return 0
+       occ_dif = bra1.occ[i] - bra2.occ[i] 
+       o1 = np.where(occ_dif == -1)[0][0]
+       o2 = np.where(occ_dif == 1)[0][0]
+       if o1 < o2:
+           phase = (-1)**bra1.occ[i][o1:o2].sum()
+       else:
+           phase = (-1)**bra1.occ[i][o1:o2:-1].sum()
+       J = np.einsum('nn, n->', molint[o1,o2], bra1.occ[0]) + np.einsum('nn, n->', molint[o1,o2], bra1.occ[1]) 
+       if nalpha == 2:
+           K = np.einsum('nn, n->', molint.swapaxes(1,3)[o1,o2], bra1.occ[0])
+       if nalpha == 0:
+           K = np.einsum('nn, n->', molint.swapaxes(1,3)[o1,o2], bra1.occ[1])
+       return phase * bra1.p * bra2.p * (J - K)
 
-    if int(dif) == 0:
-        for orb in np.where(bra1.occ[0] == 1)[0]:
-            out += molint[orb, orb]
-        for orb in np.where(bra1.occ[1] == 1)[0]:
-            out += molint[orb, orb]
-        return out*bra1.p * bra2.p
-
-    # Second case. We know from Slater rules that only the integral (p|h|q) needs to be elvaluted (p and q are the differente MOs)
-    # We do so, but using second quantization to keep track of the sign. It is simular to the brute force, but in this case we just compute phases factors
-    # For the specific p and q. Note that phase is compute for (p|h|q) and (q|h|p) (p1 and p2) as we sum over all pair within second quant.
-
-    if int(dif) == 2:
-        nalpha = dif.occ[0].sum()
-        if nalpha == 0:
-            orbs = np.where(dif.occ[1] == 1)[0]
-            p1 = overlap(bra1.an(orbs[0],0), bra2.an(orbs[1],0)) + overlap(bra1.an(orbs[0],1), bra2.an(orbs[1],1))
-            p2 = overlap(bra1.an(orbs[1],0), bra2.an(orbs[0],0)) + overlap(bra1.an(orbs[1],1), bra2.an(orbs[0],1))
-            return molint[orbs[0], orbs[1]] * (p1 + p2)
-        if nalpha == 2:
-            orbs = np.where(dif.occ[0] == 1)[0]
-            p1 = overlap(bra1.an(orbs[0],0), bra2.an(orbs[1],0)) + overlap(bra1.an(orbs[0],1), bra2.an(orbs[1],1))
-            p2 = overlap(bra1.an(orbs[1],0), bra2.an(orbs[0],0)) + overlap(bra1.an(orbs[1],1), bra2.an(orbs[0],1))
-            return molint[orbs[0], orbs[1]]* (p1 + p2)
-        else:
-            return 0
-
-    # Third case. Again, just Slater rules, which says this is zero. 
-
-    else:
-        return 0
+   elif int(diff) == 4:
+       pass
+   else:
+       return 0
             
 class CI:
     
@@ -171,20 +180,22 @@ class CI:
 
         H = []
         print("Generating Hamiltonian Matrix")
+        t0 = timeit.default_timer()
         prog_total = len(determinants)
         prog = 0
         for d1 in determinants:
             hold = []
             for d2 in determinants:
-                hold.append(Hone(d1, d2, self.MIone) + BF_Htwo(d1, d2, self.MItwo))
+                hold.append(SR_Hone(d1, d2, self.MIone)) #+ BF_Htwo(d1, d2, self.MItwo))
             H.append(hold)
             prog += 1
             print("Progress: {:2.0f}%".format((prog/prog_total)*100))
-            
-        print("Diagonalizing Hamiltonian Matrix")
-        E, C = la.eigh(H)
-        print("Energies:")
-        print(E + self.V_nuc)
+        tf = timeit.default_timer()
+        print("Complete. Time needed: {}".format(tf - t0))
+        #print("Diagonalizing Hamiltonian Matrix")
+        #E, C = la.eigh(H)
+        #print("Energies:")
+        #print(E + self.V_nuc)
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@
 
 import os
 import sys
-import time
+import timeit
 
 file_dir = os.path.dirname('.')
 sys.path.append(file_dir)
@@ -40,4 +40,22 @@ rhf = RHF(mol, mints)
 psi4.core.print_out('Psi4 RHF Energy:  {:<5.10f}\n'.format(psiE))
 
 ci = CI(rhf)
-ci.compute_CIS()
+#ci.compute_CIS()
+
+a = [1, 1, 0, 1, 1, 0, 0]
+b = [1, 1, 0, 1, 1, 0, 0]
+ref = Bra([a, b])
+ref1 = ref.an(1,0).cr(5,0)
+ref2 = ref1.an(1,1).cr(5,1)
+
+one = ref1
+two = ref
+
+t0 = timeit.default_timer()
+print(BF_Htwo(one, two, ci.MItwo))
+tf = timeit.default_timer()
+print('Time: {}'.format(tf - t0))
+t0 = timeit.default_timer()
+print(Htwo(one, two, ci.MItwo))
+tf = timeit.default_timer()
+print('Time: {}'.format(tf - t0))
