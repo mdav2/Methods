@@ -119,8 +119,6 @@ def Htwo(bra1, bra2, molint):
            i = 1
        elif nalpha == 2:
            i = 0
-           J = np.einsum('mpnn, n->', molint, bra1.occ[0]) + np.einsum('mpnn, n->', molint, bra1.occ[1]) 
-           K = np.einsum('mnnp, n->', molint, bra1.occ[0])
        else:
            return 0
        occ_dif = bra1.occ[i] - bra2.occ[i] 
@@ -137,8 +135,8 @@ def Htwo(bra1, bra2, molint):
            K = np.einsum('nn, n->', molint.swapaxes(1,3)[o1,o2], bra1.occ[1])
        return phase * bra1.p * bra2.p * (J - K)
 
-   elif int(diff) == 4:
-       pass
+   elif int(dif) == 4:
+       return 0
    else:
        return 0
             
@@ -186,16 +184,19 @@ class CI:
         for d1 in determinants:
             hold = []
             for d2 in determinants:
-                hold.append(SR_Hone(d1, d2, self.MIone)) #+ BF_Htwo(d1, d2, self.MItwo))
+                hold.append(Hone(d1, d2, self.MIone) + Htwo(d1, d2, self.MItwo))
             H.append(hold)
             prog += 1
             print("Progress: {:2.0f}%".format((prog/prog_total)*100))
         tf = timeit.default_timer()
-        print("Complete. Time needed: {}".format(tf - t0))
-        #print("Diagonalizing Hamiltonian Matrix")
-        #E, C = la.eigh(H)
-        #print("Energies:")
-        #print(E + self.V_nuc)
+        print("Completed. Time needed: {}".format(tf - t0))
+        print("Diagonalizing Hamiltonian Matrix")
+        t0 = timeit.default_timer()
+        E, C = la.eigh(H)
+        tf = timeit.default_timer()
+        print("Completed. Time needed: {}".format(tf - t0))
+        print("Energies:")
+        print(E + self.V_nuc)
 
 
 if __name__ == '__main__':
