@@ -40,7 +40,7 @@ rhf = RHF(mol, mints)
 psi4.core.print_out('Psi4 RHF Energy:  {:<5.10f}\n'.format(psiE))
 
 ci = CI(rhf)
-ci.compute_CIS()
+ci.compute_CISD()
 
 #a = [1, 1, 0, 1, 1, 0, 0]
 #b = [1, 1, 0, 1, 1, 0, 0]

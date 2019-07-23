@@ -61,7 +61,7 @@ def Hone(bra1, bra2, molint):
 
     # Use slater rules case 1: Equal determinants. 
     # Sum over the molecular integrals with equal index, but multiply by the occupancy. This way we do not sum unoccipied orbitals.
-    if int(dif) == 0:
+    if dif == 0:
         out = 0
         A = np.einsum('mm,m->', molint, bra1.occ[0])
         B = np.einsum('mm,m->', molint, bra1.occ[1])
@@ -73,22 +73,14 @@ def Hone(bra1, bra2, molint):
     # Move the orbital that returned 1 to the position where it returned -1. Thus we need to count how many occupied orbitals are there
     # In between these two positions to compute the phase.
 
-    elif int(dif) == 2:
-        nalpha = dif.occ[0].sum()
-        if nalpha == 0:
-            i = 1
-        elif nalpha == 2:
-            i = 0
-        else:
+    elif dif == 2:
+        # Use notin to return a list of [orbital, spin] that are present in the first bra, but not in the second
+        [o1, s1] = bra1.notin(bra2)[0]
+        [o2, s2] = bra2.notin(bra1)[0]
+        if s1 != s2:  # Check if the different orbitals have same spin
             return 0
-        occ_dif = bra1.occ[i] - bra2.occ[i] 
-        o1 = np.where(occ_dif == -1)[0][0]
-        o2 = np.where(occ_dif == 1)[0][0]
-        if o1 < o2:
-            phase = (-1)**bra1.occ[i][o1:o2].sum()
-        else:
-            phase = (-1)**bra1.occ[i][o1:o2:-1].sum()
-        return molint[o1,o2] * phase * bra1.p * bra2.p
+        phase = bra1.an(o1, s1).cr(o2, s2).p * bra2.p # Annihilating o1 and creating o2 generates the same phase as moving o1 to the o2 position
+        return molint[o1, o2] * phase
 
     # Third case. Determinants differ in more than two MO. Return zero.
 
@@ -99,47 +91,68 @@ def Hone(bra1, bra2, molint):
 # The multiple einsums are used to account for the occupancy with all combinations of alpha and beta M and N orbitals
 
 def Htwo(bra1, bra2, molint):
-   dif = bra1 - bra2
-   if int(dif) == 0:
-       alphas = bra1.occ[0]
-       betas = bra1.occ[1]
-       x1 = np.einsum('mmnn, m, n', molint, alphas, alphas)
-       x2 = np.einsum('mmnn, m, n', molint, betas, betas)
-       x3 = np.einsum('mmnn, m, n', molint, alphas, betas)
-       x4 = np.einsum('mmnn, m, n', molint, betas, alphas)
-       J = x1 + x2 + x3 + x4
-       x1 = np.einsum('mnnm, m, n', molint, alphas, alphas)
-       x2 = np.einsum('mnnm, m, n', molint, betas, betas)
-       K = x1 + x2
-       return 0.5 * bra1.p * bra2.p * (J - K)
+    dif = bra1 - bra2
+    if dif == 0:
+        alphas = bra1.occ[0]
+        betas = bra1.occ[1]
+        # Compute J for all combinations of m n being alpha or beta
+        x1 = np.einsum('mmnn, m, n', molint, alphas, alphas)
+        x2 = np.einsum('mmnn, m, n', molint, betas, betas)
+        x3 = np.einsum('mmnn, m, n', molint, alphas, betas)
+        x4 = np.einsum('mmnn, m, n', molint, betas, alphas)
+        J = x1 + x2 + x3 + x4
+        # For K m and n have to have the same spin, thus only two cases are considered
+        x1 = np.einsum('mnnm, m, n', molint, alphas, alphas)
+        x2 = np.einsum('mnnm, m, n', molint, betas, betas)
+        K = x1 + x2
+        return 0.5 * bra1.p * bra2.p * (J - K)
 
-   elif int(dif) == 2:
-       nalpha = dif.occ[0].sum()
-       if nalpha == 0:
-           i = 1
-       elif nalpha == 2:
-           i = 0
-       else:
-           return 0
-       occ_dif = bra1.occ[i] - bra2.occ[i] 
-       o1 = np.where(occ_dif == -1)[0][0]
-       o2 = np.where(occ_dif == 1)[0][0]
-       if o1 < o2:
-           phase = (-1)**bra1.occ[i][o1:o2].sum()
-       else:
-           phase = (-1)**bra1.occ[i][o1:o2:-1].sum()
-       J = np.einsum('nn, n->', molint[o1,o2], bra1.occ[0]) + np.einsum('nn, n->', molint[o1,o2], bra1.occ[1]) 
-       if nalpha == 2:
-           K = np.einsum('nn, n->', molint.swapaxes(1,3)[o1,o2], bra1.occ[0])
-       if nalpha == 0:
-           K = np.einsum('nn, n->', molint.swapaxes(1,3)[o1,o2], bra1.occ[1])
-       return phase * bra1.p * bra2.p * (J - K)
+    elif dif == 2:
+        # Use notin to return a list of [orbital, spin] that are present in the first bra, but not in the second
+        [o1, s1] = bra1.notin(bra2)[0]
+        [o2, s2] = bra2.notin(bra1)[0]
+        if s1 != s2:  # Check if the different orbitals have same spin
+            return 0
+        phase = bra1.an(o1, s1).cr(o2, s2).p * bra2.p # Annihilating o1 and creating o2 generates the same phase as moving o1 to the o2 position
+        # For J, (mp|nn), n can have any spin. Two cases are considered then. Obs: bra1.occ or bra2.occ would yield the same result. When n = m or p J - K = 0
+        J = np.einsum('nn, n->', molint[o1,o2], bra1.occ[0]) + np.einsum('nn, n->', molint[o1,o2], bra1.occ[1]) 
+        K = np.einsum('nn, n->', molint.swapaxes(1,3)[o1,o2], bra1.occ[s1])
+        return phase * (J - K)
 
-   elif int(dif) == 4:
-       return 0
-   else:
-       return 0
+    elif dif == 4:
+        [[o1, s1], [o2, s2]] = bra1.notin(bra2)
+        [[o3, s3], [o4, s4]] = bra2.notin(bra1)
+        phase = bra1.an(o1, s1).cr(o3, s3).an(o2, s2).cr(o4, s4).p * bra2.p
+        if s1 == s3 and s2 == s4:
+            J = molint[o1, o3, o2, o4] 
+        else:
+            J = 0
+        if s1 == s4 and s2 == s3:
+            K = molint[o1, o4, o2, o3]
+        else:
+            K = 0
+        return phase * (J - K)
+    else:
+        return 0
             
+def get_H(dets, molint1, molint2, v = False, t = False):
+        H = []
+        t0 = timeit.default_timer()
+        prog_total = len(dets)
+        prog = 0
+        for d1 in dets:
+            hold = []
+            for d2 in dets:
+                hold.append(Hone(d1, d2, molint1) + Htwo(d1, d2, molint2))
+            H.append(hold)
+            prog += 1
+            if v:
+                print("Progress: {:2.0f}%".format((prog/prog_total)*100))
+        tf = timeit.default_timer()
+        if t:
+            print("Completed. Time needed: {}".format(tf - t0))
+        return H
+
 class CI:
     
 # Pull in Hartree-Fock data, including integrals
@@ -166,30 +179,27 @@ class CI:
         oc = np.array([1]*self.ndocc + [0]*self.virtual)
         self.ref = Bra([oc, oc])
         determinants = [self.ref]
+
+        # GENERATE EXCITATIONS
+
         print("Generating singly excited states")
         prog_total = self.virtual*self.ndocc*2
         prog = 0
         for i in range(self.ndocc, self.nbf):
             for a in range(self.ndocc):
                 for s in [0, 1]:
-                    determinants.append(self.ref.an(a, s).cr(i, s))
+                    new = self.ref.an(a, s).cr(i, s)
+                    determinants.append(new)
                     prog += 1
                     print("Progress: {:2.0f}%".format(100*prog/prog_total))
 
-        H = []
+        # COMPUTE HAMILTONIAN MATRIX
+
         print("Generating Hamiltonian Matrix")
-        t0 = timeit.default_timer()
-        prog_total = len(determinants)
-        prog = 0
-        for d1 in determinants:
-            hold = []
-            for d2 in determinants:
-                hold.append(Hone(d1, d2, self.MIone) + Htwo(d1, d2, self.MItwo))
-            H.append(hold)
-            prog += 1
-            print("Progress: {:2.0f}%".format((prog/prog_total)*100))
-        tf = timeit.default_timer()
-        print("Completed. Time needed: {}".format(tf - t0))
+        H = get_H(determinants, self.MIone, self.MItwo, v = True, t = True)
+
+        # DIAGONALIZE HAMILTONIAN MATRIX
+
         print("Diagonalizing Hamiltonian Matrix")
         t0 = timeit.default_timer()
         E, C = la.eigh(H)
@@ -198,14 +208,53 @@ class CI:
         print("Energies:")
         print(E + self.V_nuc)
 
+    def compute_CISD(self):
+        print("Starting CIS computation")
+        oc = np.array([1]*self.ndocc + [0]*self.virtual)
+        self.ref = Bra([oc, oc])
+        determinants = [self.ref]
 
-if __name__ == '__main__':
-    alphas = np.array([1, 0, 1, 0, 0, 0])
-    betas  = np.array([1, 1, 0, 0, 0, 0])
-    occ = np.array([alphas, betas])
-    ref = Bra(occ)
-    ref2 = ref.an(1,1).cr(2,1)
-    print(ref)
-    print(BF_Hone(ref, ref))
-    print(BF_Htwo(ref, ref))
+        # GENERATE EXCITATIONS
 
+        print("Generating singly excited states")
+        prog_total = self.virtual*self.ndocc*2
+        prog = 0
+        for i in range(self.ndocc, self.nbf):
+            for a in range(self.ndocc):
+                for s in [0, 1]:
+                    new = self.ref.an(a, s).cr(i, s)
+                    determinants.append(new)
+                    prog += 1
+                    print("Progress: {:2.0f}%".format(100*prog/prog_total))
+
+        print("Generating doubly excited states")
+        prog_total = len(range(self.ndocc, self.nbf))
+        prog = 0
+        for i in range(self.ndocc, self.nbf):
+            for j in range(self.ndocc, self.nbf):
+                if i == j: break
+                for a in range(self.ndocc):
+                    for b in range(self.ndocc):
+                        if a == b: break
+                        for s1 in [0, 1]:
+                            for s2 in [0, 1]:
+                                new = self.ref.an(a, s1).cr(i, s1).an(b, s2).cr(j,s2)
+                                if new.p != 0:
+                                    determinants.append(new)
+            prog += 1
+            print("Progress: {:2.0f}%".format(100*prog/prog_total))
+
+        # COMPUTE HAMILTONIAN MATRIX
+
+        print("Generating Hamiltonian Matrix")
+        H = get_H(determinants, self.MIone, self.MItwo, v = True, t = True)
+
+        # DIAGONALIZE HAMILTONIAN MATRIX
+
+        print("Diagonalizing Hamiltonian Matrix")
+        t0 = timeit.default_timer()
+        E, C = la.eigh(H)
+        tf = timeit.default_timer()
+        print("Completed. Time needed: {}".format(tf - t0))
+        print("Energies:")
+        print(E + self.V_nuc)

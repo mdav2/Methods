@@ -35,14 +35,25 @@ class Bra:
     def __int__(self):
         return int(self.occ[0].sum() + self.occ[1].sum())
         
-# Subtraction of two bras will produce a new bra where orbitals occupied in both original bras were removed.
-# For exemple A = [0, 1, 1], B = [1, 0, 1]: A - B = [1, 1, 0]
-# Using int(A - B) will tell how different the two bras are
+# Subtraction of two bras returns the number of different occupied orbitals between the two
 
     def __sub__(self, other):
         a = abs(self.occ[0] - other.occ[0])
         b = abs(self.occ[1] - other.occ[1])
-        return Bra([a, b])
+        return a.sum() + b.sum()
+
+# Function: Given other bra, return a list of orbitals (e.g. [ [1,0], [3,1], etc]) that are found
+# in the first bra, but not in the second
+
+    def notin(self, other):
+        out = []
+        a = self.occ[0] - other.occ[0]
+        for i in np.where(a == 1)[0]:
+            out.append([i, 0])
+        b = self.occ[1] - other.occ[1]
+        for i in np.where(b == 1)[0]:
+            out.append([i, 1])
+        return out
 
 # Function to return another Bra object with an orbital annihilated keeping track of the sign.
 
