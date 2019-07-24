@@ -225,21 +225,20 @@ class CI:
                     new = self.ref.an(a, s).cr(i, s)
                     determinants.append(new)
                     prog += 1
-                    print("Progress: {:2.0f}%".format(100*prog/prog_total))
+            print("Progress: {:2.0f}%".format(100*prog/prog_total))
 
         print("Generating doubly excited states")
+        # Something very wrong here rsrs
         prog_total = len(range(self.ndocc, self.nbf))
         prog = 0
         for i in range(self.ndocc, self.nbf):
             for j in range(self.ndocc, self.nbf):
-                if i == j: break
                 for a in range(self.ndocc):
                     for b in range(self.ndocc):
-                        if a == b: break
                         for s1 in [0, 1]:
                             for s2 in [0, 1]:
                                 new = self.ref.an(a, s1).cr(i, s1).an(b, s2).cr(j,s2)
-                                if new.p != 0:
+                                if new.p != 0 and new not in determinants:
                                     determinants.append(new)
             prog += 1
             print("Progress: {:2.0f}%".format(100*prog/prog_total))
@@ -248,6 +247,7 @@ class CI:
 
         print("Generating Hamiltonian Matrix")
         H = get_H(determinants, self.MIone, self.MItwo, v = True, t = True)
+        print(H[0][0] + self.V_nuc)
 
         # DIAGONALIZE HAMILTONIAN MATRIX
 
