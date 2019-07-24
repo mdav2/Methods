@@ -4,6 +4,7 @@ import scipy.linalg as la
 import os
 import sys
 import timeit
+from itertools import permutations
 
 file_dir = os.path.dirname('../Aux/')
 sys.path.append(file_dir)
@@ -135,19 +136,73 @@ def Htwo(bra1, bra2, molint):
     else:
         return 0
             
+# Function: Compute Htwo and Hone at same time
+
+def Htot(bra1, bra2, molint1, molint2):
+    dif = bra1 - bra2
+
+    if dif == 0:
+        phase = bra1.p * bra2.p
+        alphas = bra1.occ[0]
+        betas = bra1.occ[1]
+        one = np.einsum('mm,m->', molint1, alphas) + np.einsum('mm,m->', molint1, betas)
+    
+        # Compute J for all combinations of m n being alpha or beta
+        x1 = np.einsum('mmnn, m, n', molint2, alphas, alphas)
+        x2 = np.einsum('mmnn, m, n', molint2, betas, betas)
+        x3 = np.einsum('mmnn, m, n', molint2, alphas, betas)
+        x4 = np.einsum('mmnn, m, n', molint2, betas, alphas)
+        J = x1 + x2 + x3 + x4
+        # For K m and n have to have the same spin, thus only two cases are considered
+        x1 = np.einsum('mnnm, m, n', molint2, alphas, alphas)
+        x2 = np.einsum('mnnm, m, n', molint2, betas, betas)
+        K = x1 + x2
+        return phase * (0.5 * (J - K) + one)
+
+    elif dif == 2:
+        # Use notin to return a list of [orbital, spin] that are present in the first bra, but not in the second
+        [o1, s1] = bra1.notin(bra2)[0]
+        [o2, s2] = bra2.notin(bra1)[0]
+        if s1 != s2:  # Check if the different orbitals have same spin
+            return 0
+        phase = bra1.an(o1, s1).cr(o2, s2).p * bra2.p # Annihilating o1 and creating o2 generates the same phase as moving o1 to the o2 position
+        # For J, (mp|nn), n can have any spin. Two cases are considered then. Obs: bra1.occ or bra2.occ would yield the same result. When n = m or p J - K = 0
+        J = np.einsum('nn, n->', molint2[o1,o2], bra1.occ[0]) + np.einsum('nn, n->', molint2[o1,o2], bra1.occ[1]) 
+        K = np.einsum('nn, n->', molint2.swapaxes(1,3)[o1,o2], bra1.occ[s1])
+        return phase * (molint1[o1,o2] + J - K)
+
+    elif dif == 4:
+        [[o1, s1], [o2, s2]] = bra1.notin(bra2)
+        [[o3, s3], [o4, s4]] = bra2.notin(bra1)
+        phase = bra1.an(o1, s1).cr(o3, s3).an(o2, s2).cr(o4, s4).p * bra2.p
+        if s1 == s3 and s2 == s4:
+            J = molint2[o1, o3, o2, o4] 
+        else:
+            J = 0
+        if s1 == s4 and s2 == s3:
+            K = molint2[o1, o4, o2, o3]
+        else:
+            K = 0
+        return phase * (J - K)
+    else:
+        return 0
+
+# FUNCTION: Given a list of determinants, compute the Hamiltonian matrix
+
 def get_H(dets, molint1, molint2, v = False, t = False):
-        H = []
+        l = len(dets)
+        H = np.zeros((l,l))
         t0 = timeit.default_timer()
-        prog_total = len(dets)
         prog = 0
-        for d1 in dets:
-            hold = []
-            for d2 in dets:
-                hold.append(Hone(d1, d2, molint1) + Htwo(d1, d2, molint2))
-            H.append(hold)
+        for i,d1 in enumerate(dets):
+            for j,d2 in enumerate(dets):
+                if j > i:
+                    break
+                H[i,j] = Htot(d1, d2, molint1, molint2)
+                H[j,i] = H[i,j]
             prog += 1
             if v:
-                print("Progress: {:2.0f}%".format((prog/prog_total)*100))
+                print("Progress: {:2.0f}%".format((prog/l)*100))
         tf = timeit.default_timer()
         if t:
             print("Completed. Time needed: {}".format(tf - t0))
@@ -242,12 +297,12 @@ class CI:
                                     determinants.append(new)
             prog += 1
             print("Progress: {:2.0f}%".format(100*prog/prog_total))
+        print("Number of Determinants: {}".format(len(determinants)))
 
         # COMPUTE HAMILTONIAN MATRIX
 
         print("Generating Hamiltonian Matrix")
         H = get_H(determinants, self.MIone, self.MItwo, v = True, t = True)
-        print(H[0][0] + self.V_nuc)
 
         # DIAGONALIZE HAMILTONIAN MATRIX
 
@@ -258,3 +313,54 @@ class CI:
         print("Completed. Time needed: {}".format(tf - t0))
         print("Energies:")
         print(E + self.V_nuc)
+
+    # CAS assuming nbeta = nalpha
+
+    def compute_CAS(self, frozen=0, virtual=0):
+        oc = np.array([1]*self.ndocc + [0]*self.virtual)
+        self.ref = Bra([oc, oc])
+
+        print("Generating determinants")
+        t0 = timeit.default_timer()
+        frozen_a = self.ref.occ[0][0:frozen]
+        frozen_b = self.ref.occ[1][0:frozen]
+        print("Number of frozen orbitals: {}".format(len(frozen_a)+len(frozen_b)))
+
+        virtual_a = self.ref.occ[0][self.nbf-virtual:]
+        virtual_b = self.ref.occ[1][self.nbf-virtual:]
+        print("Number of virtual orbitals: {}".format(len(virtual_a)+len(virtual_b)))
+
+        active_a = self.ref.occ[0][frozen:self.nbf-virtual]
+        active_b = self.ref.occ[0][frozen:self.nbf-virtual]
+        print("Number of active orbitals: {}".format(len(active_a)+len(active_b)))
+
+        dets_a = []
+        dets_b = []
+        for i in set(permutations(active_a)):
+            dets_a.append(np.hstack((frozen_a, i, virtual_a)))
+            
+        for i in set(permutations(active_b)):
+            dets_b.append(np.hstack((frozen_b, i, virtual_b)))
+        
+        determinants = []
+        for a in dets_a:
+            for b in dets_b:
+                determinants.append(Bra([a,b]))
+        tf = timeit.default_timer()
+        print("Number of Determinants: {}".format(len(determinants)))
+        print("Completed. Time needed: {}".format(tf - t0))
+
+        # COMPUTE HAMILTONIAN MATRIX
+
+        print("Generating Hamiltonian Matrix")
+        H = get_H(determinants, self.MIone, self.MItwo, v = True, t = True)
+
+        # DIAGONALIZE HAMILTONIAN MATRIX
+
+        print("Diagonalizing Hamiltonian Matrix")
+        t0 = timeit.default_timer()
+        E, C = la.eigh(H)
+        tf = timeit.default_timer()
+        print("Completed. Time needed: {}".format(tf - t0))
+        print("CAS Energy:")
+        print(E[0] + self.V_nuc)
