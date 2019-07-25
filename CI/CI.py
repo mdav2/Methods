@@ -222,6 +222,10 @@ class CI:
         self.h = HF.T + HF.V
         self.g = HF.g.swapaxes(1,2)
         self.S = HF.S
+        print("Number of electrons: {}".format(self.nelec))
+        print("Number of basis functions: {}".format(self.nbf))
+        print("Number of doubly occupied orbitals: {}".format(self.ndocc))
+        print("Number of virtual spatial orbitals: {}".format(self.virtual))
 
 # Convert atomic integrals to MO integrals
         print("Converting atomic integrals to MO integrals...")
@@ -283,7 +287,6 @@ class CI:
             print("Progress: {:2.0f}%".format(100*prog/prog_total))
 
         print("Generating doubly excited states")
-        # Something very wrong here rsrs
         prog_total = len(range(self.ndocc, self.nbf))
         prog = 0
         for i in range(self.ndocc, self.nbf):
@@ -316,39 +319,70 @@ class CI:
 
     # CAS assuming nbeta = nalpha
 
-    def compute_CAS(self, frozen=0, virtual=0):
-        oc = np.array([1]*self.ndocc + [0]*self.virtual)
-        self.ref = Bra([oc, oc])
+    def compute_CAS(self, active_space ='',nfrozen=0, nvirtual=0):
 
+        if len(active_space) != self.nbf:
+            raise NameError("Invalid active space. Please check the number of basis functions")
+        space = []
+        n_ac_orb = 0
+        n_ac_elec_pair = int(self.nelec/2)
+        print("Reading Active space")
+        for i in active_space:
+            if i == 'o':
+                space.append(int(1))
+                n_ac_elec_pair -= 1
+            elif i == 'a':
+                space.append('a')
+                n_ac_orb += 1
+            elif i == 'u':
+                space.append(int(0))
+            else:
+                raise NameError("Invalid active space entry: {}".format(i))
+        active = np.array([1]*n_ac_elec_pair + [0]*(n_ac_orb - n_ac_elec_pair))
+        print("Number of active orbitals: {}".format(n_ac_orb))
+        print("Number of active electrons: {}".format(2*n_ac_elec_pair))
+
+        print("Generating excitations")
+        perms = set(permutations(active))
         print("Generating determinants")
-        t0 = timeit.default_timer()
-        frozen_a = self.ref.occ[0][0:frozen]
-        frozen_b = self.ref.occ[1][0:frozen]
-        print("Number of frozen orbitals: {}".format(len(frozen_a)+len(frozen_b)))
-
-        virtual_a = self.ref.occ[0][self.nbf-virtual:]
-        virtual_b = self.ref.occ[1][self.nbf-virtual:]
-        print("Number of virtual orbitals: {}".format(len(virtual_a)+len(virtual_b)))
-
-        active_a = self.ref.occ[0][frozen:self.nbf-virtual]
-        active_b = self.ref.occ[0][frozen:self.nbf-virtual]
-        print("Number of active orbitals: {}".format(len(active_a)+len(active_b)))
-
-        dets_a = []
-        dets_b = []
-        for i in set(permutations(active_a)):
-            dets_a.append(np.hstack((frozen_a, i, virtual_a)))
-            
-        for i in set(permutations(active_b)):
-            dets_b.append(np.hstack((frozen_b, i, virtual_b)))
-        
         determinants = []
-        for a in dets_a:
-            for b in dets_b:
-                determinants.append(Bra([a,b]))
-        tf = timeit.default_timer()
-        print("Number of Determinants: {}".format(len(determinants)))
-        print("Completed. Time needed: {}".format(tf - t0))
+        for p1 in perms:
+            for p2 in perms:
+                alpha = space.copy()
+                beta =  space.copy()
+                for i,x in enumerate(np.where(np.array(space) == 'a')[0]):
+                    alpha[x] = p1[i]
+                    beta[x] = p2[i]
+                determinants.append(Bra([alpha, beta]))
+        print(determinants[0] - determinants[1])
+        print("Number of determinants: {}".format(len(determinants)))
+
+        # This part only works if # alpha elec = # beta elec
+        if False:
+            oc = np.array([1]*self.ndocc + [0]*self.virtual)
+            self.ref = Bra([oc, oc])
+            print("Generating determinants")
+            t0 = timeit.default_timer()
+            frozen = self.ref.occ[0][0:nfrozen]
+            print("Number of frozen orbitals: {}".format(2*len(frozen)))
+
+            virtual = self.ref.occ[0][self.nbf-nvirtual:]
+            print("Number of virtual orbitals: {}".format(2*len(virtual)))
+
+            active = self.ref.occ[0][nfrozen:self.nbf-nvirtual]
+            print("Number of active orbitals: {}".format(2*len(active)))
+            dets = []
+            print("Generation permutations")
+            for i in set(permutations(active)):
+                dets.append(np.hstack((frozen, i, virtual)))
+            print("Storing determinants") 
+            determinants = []
+            for a in dets:
+                for b in dets:
+                    determinants.append(Bra([a,b]))
+            tf = timeit.default_timer()
+            print("Number of Determinants: {}".format(len(determinants)))
+            print("Completed. Time needed: {}".format(tf - t0))
 
         # COMPUTE HAMILTONIAN MATRIX
 
@@ -363,4 +397,7 @@ class CI:
         tf = timeit.default_timer()
         print("Completed. Time needed: {}".format(tf - t0))
         print("CAS Energy:")
-        print(E[0] + self.V_nuc)
+        self.Ecas = E[0] + self.V_nuc
+        print(self.Ecas)
+        psi4.core.print_out("CAS Energy: {:<15.10f} ".format(self.Ecas) + emoji('whale'))
+        return self.Ecas

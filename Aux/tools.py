@@ -8,7 +8,8 @@ def emoji(key):
     "eyes"   : b'\xF0\x9F\x91\x80'.decode('utf-8'),
     "cycle"  : b'\xF0\x9F\x94\x83'.decode('utf-8'),
     "crying" : b'\xF0\x9F\x98\xAD'.decode('utf-8'),
-    "pleft"  : b'\xF0\x9F\x91\x88'.decode('utf-8')
+    "pleft"  : b'\xF0\x9F\x91\x88'.decode('utf-8'),
+    "whale"  : b'\xF0\x9F\x90\xB3'.decode('utf-8')
     }
     return stored[key]
 

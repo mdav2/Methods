@@ -20,7 +20,7 @@ molecule mol {
 }
 
 set {
-    BASIS         6-31g
+    BASIS         sto-3g
     E_CONVERGENCE 10
     SCF_TYPE      pk
     MAXITER       50
@@ -40,6 +40,6 @@ rhf = RHF(mol, mints)
 psi4.core.print_out('Psi4 RHF Energy:  {:<5.10f}\n'.format(psiE))
 
 ci = CI(rhf)
-#ci.compute_CAS(1,1)
-ci.compute_CISD()
+ci.compute_CAS('aaaaaaa')
+#ci.compute_CISD()
 
