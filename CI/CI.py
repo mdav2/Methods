@@ -46,7 +46,7 @@ class CI:
         print("Starting CIS computation")
         oc = np.array([1]*self.ndocc + [0]*self.virtual)
         self.ref = Bra([oc, oc])
-        determinants = [self.ref]
+        self.determinants = [self.ref]
 
         # GENERATE EXCITATIONS
 
@@ -125,6 +125,7 @@ class CI:
         print("Completed. Time needed: {}".format(tf - t0))
         print("Energies:")
         print(E + self.V_nuc)
+        psi4.core.print_out("\nCISD Energy: {:<15.10f} ".format(E[0]+self.V_nuc) + emoji('viva'))
 
     # CAS assuming nbeta = nalpha
 
@@ -158,7 +159,7 @@ class CI:
         print("Generating excitations")
         perms = set(permutations(active))
         print("Generating determinants")
-        determinants = []
+        self.determinants = []
         for p1 in perms:
             for p2 in perms:
                 alpha = space.copy()
@@ -166,14 +167,13 @@ class CI:
                 for i,x in enumerate(np.where(np.array(space) == 'a')[0]):
                     alpha[x] = p1[i]
                     beta[x] = p2[i]
-                determinants.append(Bra([alpha, beta]))
-        print(determinants[0] - determinants[1])
-        print("Number of determinants: {}".format(len(determinants)))
+                self.determinants.append(Bra([alpha, beta]))
+        print("Number of determinants: {}".format(len(self.determinants)))
 
         # COMPUTE HAMILTONIAN MATRIX
 
         print("Generating Hamiltonian Matrix")
-        H = get_H(determinants, self.MIone, self.MItwo, v = True, t = True)
+        H = get_H(self.determinants, self.MIone, self.MItwo, v = True, t = True)
 
         # DIAGONALIZE HAMILTONIAN MATRIX
 
@@ -183,7 +183,9 @@ class CI:
         tf = timeit.default_timer()
         print("Completed. Time needed: {}".format(tf - t0))
         print("CAS Energy:")
+        self.E = E[0]
+        self.C0 = Ccas[:,0]
         self.Ecas = E[0] + self.V_nuc
         print(self.Ecas)
-        psi4.core.print_out("CAS Energy: {:<15.10f} ".format(self.Ecas) + emoji('whale'))
+        psi4.core.print_out("\nCAS Energy: {:<15.10f} ".format(self.Ecas) + emoji('whale'))
         return self.Ecas

@@ -10,7 +10,11 @@ sys.path.append(file_dir)
 file_dir = os.path.dirname('../Aux/')
 sys.path.append(file_dir)
 
+file_dir = os.path.dirname('../CI/')
+sys.path.append(file_dir)
+
 from tools import *
+from CASINT import *
 
 molecule mol {
     0 1
@@ -39,5 +43,14 @@ from CI import *
 rhf = RHF(mol, mints)
 psi4.core.print_out('Psi4 RHF Energy:  {:<5.10f}\n'.format(psiE))
 
-ci = CI(rhf)
-ci.compute_CAS('aaaaaau')
+CI(rhf).compute_CISD()
+
+a = CI(rhf)
+a.compute_CAS('aaaaaau')
+
+b = CI(rhf)
+b.compute_CAS('aaaaaua')
+
+Ecasint = CASINT([a, b])
+
+psi4.core.print_out('\nCASINT Energy:  {:<5.10f}\n'.format(Ecasint))
