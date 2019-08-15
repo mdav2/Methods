@@ -15,7 +15,7 @@ molecule mol {
 
 set {
     BASIS         sto-3g
-    E_CONVERGENCE 10
+    E_CONVERGENCE 12
     SCF_TYPE      pk
     MAXITER       50
 }

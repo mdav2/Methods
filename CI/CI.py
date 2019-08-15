@@ -29,6 +29,7 @@ class CI:
         self.virtual = self.nbf - self.ndocc
         self.V_nuc = HF.V_nuc
         self.h = HF.T + HF.V
+        # chemists
         self.g = HF.g.swapaxes(1,2)
         self.S = HF.S
         print("Number of electrons: {}".format(self.nelec))
@@ -37,9 +38,12 @@ class CI:
         print("Number of virtual spatial orbitals: {}".format(self.virtual))
 
 # Convert atomic integrals to MO integrals
+        psi4_orb = psi4.core.Matrix.from_array(self.orbitals)
         print("Converting atomic integrals to MO integrals...")
         self.MIone = np.einsum('up,vq,uv->pq', self.orbitals, self.orbitals, self.h)
-        self.MItwo = np.einsum('up,vq,hr,zs,uvhz->pqrs', self.orbitals, self.orbitals, self.orbitals, self.orbitals,self.g)
+        # Einsum to get molecular intergral -> slow!!!!
+        #self.MItwo = np.einsum('up,vq,hr,zs,uvhz->pqrs', self.orbitals, self.orbitals, self.orbitals, self.orbitals,self.g)
+        self.MItwo = np.asarray(HF.mints.mo_eri(psi4_orb, psi4_orb, psi4_orb, psi4_orb))
         print("Completed!")
 
     def compute_CIS(self):

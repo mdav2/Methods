@@ -80,8 +80,11 @@ class RHF:
                 psi4.core.print_out('\nFinal RHF Energy: {:<15.10f} '.format(E1) + emoji("pleft") + '\n')
                 self.orbitals = C
                 self.E = E1
+                Fmol = np.einsum('uv,ui,vj->ij', h+self.vu, C, C)
+                self.Fmol = np.einsum('ii->i',Fmol)
+                self.Eorb = e
                 break
             else:
                 E0 = E1
         else:
-            psi4.core.print_out('\n SCF did not converge ' + crying + '\n')
+            psi4.core.print_out('\n SCF did not converge ' + emoji('crying') + '\n')
