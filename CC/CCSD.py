@@ -37,58 +37,98 @@ class CC:
         print("Number of virtual spatial orbitals: {}".format(self.virtual))
 
 # Convert atomic integrals to MO integrals
+
         psi4_orb = psi4.core.Matrix.from_array(self.orbitals)
         print("Converting atomic integrals to MO integrals...")
         self.MIone = np.einsum('up,vq,uv->pq', self.orbitals, self.orbitals, self.h)
         self.MItwo = np.asarray(HF.mints.mo_eri(psi4_orb, psi4_orb, psi4_orb, psi4_orb))
         # Convert to physicist notation
         self.MItwo = self.MItwo.swapaxes(1,2)
+        self.antis = self.MItwo - self.MItwo.swapaxes(2,3) 
         print("Completed!")
 
-# Functions to compute Amplitudes
+# Function to compute energy given a set of amplitudes
 
-
-    def CC_Energy(self, T1a, T2a):
-        #return np.einsum('ijab,ijab->',self.MItwo, T2a) - np.einsum('ijba,ijab->',self.MItwo, T2a)
-        e2 = 0
-        mp2 = 0
-        for i in self.holes:
-            for j in self.holes:
-                for a in self.particles:
-                    for b in self.particles:
-                        e2 = e2 + 0.5*(3*self.MItwo[i,j,a,b] - self.MItwo[i,j,b,a])*T2a[i,j,a,b]
-                        mp2 += (self.MItwo[i,j,a,b]*(2*self.MItwo[i,j,a,b]-self.MItwo[i,j,b,a]))/(self.eo[i] + self.eo[j] - self.eo[a] - self.eo[b])
-        print('MP2 corelation: {}'.format(mp2))
-        return e2
+    def CC_Energy(self, T1SS, T1OS, T2SS, T2OS):
+        e1 = np.einsum('ijab, ia, jb->', self.antis, T1SS, T1SS) + 2*np.einsum('ijab, ia, jb->', self.MItwo, T1OS, T1OS)
+        e2 = 0.5*np.einsum('ijab,ijab->', self.antis, T2SS) + np.einsum('ijab,ijab->', self.MItwo, T2OS)
+        return e1 + e2
         
-        return np.einsum('ijab,ijab->',self.g, T2a) 
+    def Iter_T1(self, T1SS, T1OS, T2SS, T2OS):
+        
+        T1SS_out = np.zeros ([self.nbf, self.nbf])
 
-    def SDT1(self, T1_init, T2_init):
-        pass
+        # Update T1 Same Spin, orbitals a and i assumed to be alpha.
+        
+        # Terms in the same order as shown in pag 75 Crawford and Schaefer, Rev Comp Chem Vol 14 Chap 2
+
+        # First term F(a,i) zero due to cannonical HF orbitals
+
+        # Second and third terms are simply the matrix element D(i,a) times T(a,i), those are transfered to the left side of the equation
+
+        # 4th term for the case all alphas
+        hold = np.einsum('kaci,kc->ia', self.antis, T1SS)
+        # 4th term for the case k, c betas
+        hold += np.einsum('kaci,kc->ia', self.MItwo, T1SS)
+
+        # 5th term is zero due cannocal HF orbitals
+
+        # 6th term for all alpha
+        hold += 0.5*np.einsum('kacd,kicd->ia', self.antis, T2SS)
+        # 6th term for k and c betas or k and d betas (equivalent cases, thus 2x factor)
+        hold += np.einsum('kacd,kicd->ia', self.MItwo, T2OS)
+
+        # 7th term all alphas
+        hold -= 0.5*np.einsum('klci,klca->ia', self.antis, T2SS)
+        # 7th term k and c betas or l and c betas (eq. cases, thus 2x factor)
+        hold -= np.einsum('klci,klca->ia', self.MItwo, T2OS)
+
+        # 8th term zero due cannonical HF orbitals
+
+        # 9th term all alphas
+        hold -= np.einsum('klci,kc,la->ia', self.antis, T1SS, T1SS)
+        # 9th term k and c betas or l and c betas (eq. cases, thus 2x factor)
+        hold -= 2*np.einsum('klci,kc,la->ia', self.MItwo, T1SS, T1OS)  # CHECK
+
+# double check thoseeee
+
+        # 10th term all alphas
+        hold -= np.einsum('kacd,kc,id->ia', self.antis, T1SS, T1SS)
+        # 10th term k and c betas or k and d betas (eq. cases, thus 2x factor)
+        hold -= 2*np.einsum('kacd,kc,id->ia', self.MItwo, T1OS, T1OS)
+
+        # 11th term all alphas
+        hold -= np.einsum('klcd,kc,id,la->ia', self.antis, T1SS, T1SS, T1SS)
+        # 11th term 
+
+        T1SS_out[i,a] = d[i,a]*hold
+                
+        
 
     def SDT2(self, T1_init, T2_init):
         pass
 
-    def CCSD(self, CC_CONV, CC_MAXITER):
-        
-        # Compute initial guess for T1 and T2 amplitudes
-        T1 = np.zeros([self.nbf, self.nbf])
+    def CCSD(self, CC_CONV=6, CC_MAXITER=50):
 
-        # Build auxiliar D matrix
+        # Build auxiliar D and d  matrices for T2 and T1 amplitudes, respectivamente.
 
         D = np.zeros([self.nbf, self.nbf, self.nbf, self.nbf])
-        T2loop = np.zeros([self.nbf, self.nbf, self.nbf, self.nbf])
+        d = np.zeros([self.nbf, self.nbf])
         for i in self.holes:
-            for j in self.holes:
-                for a in self.particles:
+            for a in self.particles:
+                d[i,a] = 1/(self.eo[i] - self.eo[a])
+                for j in self.holes:
                     for b in self.particles:
                         D[i,j,a,b] = 1/(self.eo[i] + self.eo[j] - self.eo[a] - self.eo[b])
-                        D[j,i,a,b] = D[i,j,a,b]
-                        D[i,j,b,a] = D[i,j,a,b]
-                        D[j,i,b,a] = D[i,j,a,b]
-                        T2loop[i,j,a,b] =  4*(self.MItwo[i,j,a,b]-self.MItwo[i,j,b,a])/(self.eo[i] + self.eo[j] - self.eo[a] - self.eo[b])
+
+        # Compute initial guess for T1 and T2 amplitudes
+
+        T1SS = np.zeros([self.nbf, self.nbf])
+        T1OS = np.zeros([self.nbf, self.nbf])
+
+        T2SS = np.einsum('ijab,ijab->ijab', self.antis, D)
+        T2OS = np.einsum('ijab,ijab->ijab', self.MItwo, D)
         
-        #T2 = 4*np.einsum('abij,ijab->ijab',self.g, D)
-        
-        Emp2 = self.CC_Energy(T1, T2loop) + self.E0
+        # Report the MP2 Energy from the initial guess
+        Emp2 = self.CC_Energy(T1SS, T1OS, T2SS, T2OS) + self.E0
         psi4.core.print_out('CC MP2 Energy:    {:<5.10f}\n'.format(Emp2))
