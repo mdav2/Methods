@@ -49,12 +49,15 @@ class CC:
 
 # Function to compute energy given a set of amplitudes
 
-    def CC_Energy(self, T1SS, T2OS):
+    def CC_Energy(self, T1SS, T1OS, T2SS, T2OS):
 
-        tau = T2OS + np.einsum('ia,jb->ijab', T1SS, T1SS)
-        X = 2*tau - tau.swapaxes(0,1)
-        E = np.einsum('ijab,ijab->',self.MItwo,X)
-        return E
+        #tau = T2OS + np.einsum('ia,jb->ijab', T1SS, T1SS)
+        #X = 2*tau - tau.swapaxes(0,1)
+        #return np.einsum('ijab,ijab->',self.MItwo,X)
+
+        e1 = np.einsum('ijab, ia, jb->', self.antis, T1SS, T1SS) + 2*np.einsum('ijab, ia, jb->', self.MItwo, T1OS, T1OS)
+        e2 = 0.5*np.einsum('ijab,ijab->', self.antis, T2SS) + np.einsum('ijab,ijab->', self.MItwo, T2OS)
+        return e1 + e2
         
     def Iter_T1(self, T1SS, T1OS, T2SS, T2OS):
         
@@ -132,9 +135,11 @@ class CC:
         # Compute initial guess for T1 and T2 amplitudes
 
         T1SS = np.zeros([self.nbf, self.nbf])
+        T1OS = np.zeros([self.nbf, self.nbf])
 
+        T2SS = np.einsum('ijab,ijab->ijab', self.antis, D)
         T2OS = np.einsum('ijab,ijab->ijab', self.MItwo, D)
         
         # Report the MP2 Energy from the initial guess
-        Emp2 = self.CC_Energy(T1SS, T2OS) + self.E0
+        Emp2 = self.CC_Energy(T1SS, T1OS, T2SS, T2OS) + self.E0
         psi4.core.print_out('CC MP2 Energy:    {:<5.10f}\n'.format(Emp2))
