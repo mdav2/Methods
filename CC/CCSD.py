@@ -197,3 +197,52 @@ class CC:
         
         print("\nCC Equations Converged!!!")
         print("Final CC Energy: {}".format(E + self.E0))
+
+
+    def CCD(self, CC_CONV=6, CC_MAXITER=50):
+
+        # Build auxiliar D and d  matrices for T2 and T1 amplitudes, respectivamente.
+
+        self.D = np.zeros([self.nbf, self.nbf, self.nbf, self.nbf])
+        self.d = np.zeros([self.nbf, self.nbf])
+        for i in self.holes:
+            for a in self.particles:
+                self.d[i,a] = 1/(self.eo[i] - self.eo[a])
+                for j in self.holes:
+                    for b in self.particles:
+                        self.D[i,j,a,b] = 1/(self.eo[i] + self.eo[j] - self.eo[a] - self.eo[b])
+
+        # Compute initial guess for T2 amplitudes
+
+        T1 = np.zeros([self.nbf, self.nbf])
+        T2 = np.einsum('ijab,ijab->ijab', self.MItwo, self.D)
+        
+        # Report the MP2 Energy from the initial guess
+        Emp2 = self.CC_Energy(T1, T2) + self.E0
+        psi4.core.print_out('CC MP2 Energy:    {:<5.10f}\n'.format(Emp2))
+        
+        ite = 1
+        T2,r2 = self.Iter_T2(T1, T2)
+        E = self.CC_Energy(T1, T2)
+        print('-'*50)
+        print("Iteration {}".format(ite))
+        print("CC Correlation energy: {}".format(E))
+        print("T2 Residue: {}".format(r2))
+        print('-'*50)
+
+        LIM = 10**(-CC_CONV)
+
+        while r2 > LIM:
+            ite += 1
+            if ite > CC_MAXITER:
+                raise NameError("CC Equations did not converge in {} iterations".format(CC_MAXITER))
+            T2,r2 = self.Iter_T2(T1, T2)
+            E = self.CC_Energy(T1, T2)
+            print('-'*50)
+            print("Iteration {}".format(ite))
+            print("CC Correlation energy: {}".format(E))
+            print("T2 Residue: {}".format(r2))
+            print('-'*50)
+        
+        print("\nCC Equations Converged!!!")
+        print("Final CCD Energy: {}".format(E + self.E0))
