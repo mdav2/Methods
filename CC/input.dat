@@ -30,6 +30,7 @@ set {
 
 psiE = energy('scf')
 psiMP2 = energy('mp2')
+#psiCCD = energy('ccd')
 
 basisname = psi4.core.get_global_option("BASIS")
 basis = psi4.core.BasisSet.build(mol, target=str(basisname), key='basis')
@@ -40,8 +41,9 @@ from CCSD import *
 rhf = RHF(mol, mints)
 psi4.core.print_out('Psi4 RHF Energy:  {:<5.10f}\n'.format(psiE))
 psi4.core.print_out('Psi4 MP2 Energy:  {:<5.10f}\n'.format(psiMP2))
+psi4.core.print_out('Psi4 CCD Energy:  {:<5.10f}\n'.format(psiCCD))
 
 # Call CC code
 cc = CC(rhf)
-cc.CCSD(CC_MAXITER=100)
+cc.CCSD()
 
