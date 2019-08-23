@@ -43,5 +43,5 @@ psi4.core.print_out('Psi4 MP2 Energy:  {:<5.10f}\n'.format(psiMP2))
 
 # Call CC code
 cc = CC(rhf)
-cc.CCSD(0,0)
+cc.CCSD(CC_MAXITER=100)
 

@@ -49,92 +49,151 @@ class CC:
 
 # Function to compute energy given a set of amplitudes
 
-    def CC_Energy(self, T1SS, T2OS):
+    def CC_Energy(self, T1, T2):
 
-        tau = T2OS + np.einsum('ia,jb->ijab', T1SS, T1SS)
-        X = 2*tau - tau.swapaxes(0,1)
+        tau = T2 + np.einsum('ia,jb->ijab', T1, T1)
+        X = 2*tau - np.einsum('ijab->jiab',tau)
         E = np.einsum('ijab,ijab->',self.MItwo,X)
         return E
         
-    def Iter_T1(self, T1SS, T1OS, T2SS, T2OS):
+    def Iter_T1(self, T1, T2):
+
+        # Auxiliar (Intermediate) Arrays 
+
+        tau = T2 + np.einsum('ia,jb->ijab', T1, T1)
+        V = 2*self.MItwo - np.einsum('ijab->ijba',self.MItwo)
+
+        T1new  = -np.einsum('ipau,ia->up', V, T1)
         
-        T1SS_out = np.zeros ([self.nbf, self.nbf])
+        X = 2*T2 - tau.swapaxes(2,3) 
 
-        # Update T1 Same Spin, orbitals a and i assumed to be alpha.
+        X = np.einsum('ijpb,ua->ijupba',T2,T1) + np.einsum('ujab,ip->ijupba',T2,T1) - np.einsum('ujpb,ia->ijupba', X, T1)
         
-        # Terms in the same order as shown in pag 75 Crawford and Schaefer, Rev Comp Chem Vol 14 Chap 2
+        T1new += np.einsum('ijab,ijupba->up', V, X)
 
-        # First term F(a,i) zero due to cannonical HF orbitals
+        T1new += np.einsum('ijau,ijap->up', V, tau)
 
-        # Second and third terms are simply the matrix element D(i,a) times T(a,i), those are transfered to the left side of the equation
+        T1new -= np.einsum('ipab,iuab->up', V, tau)
 
-        # 4th term for the case all alphas   !!! COULD MERGE THOSE TWO EINSUMS
-        hold = np.einsum('kaci,kc->ia', self.antis, T1SS)
-        # 4th term for the case k, c betas
-        hold += np.einsum('kaci,kc->ia', self.MItwo, T1SS)
+        T1new = np.einsum('up,up->up', T1new, self.d)
 
-        # 5th term is zero due cannocal HF orbitals
+        res = np.sum(np.abs(T1new - T1))
 
-        # 6th term for all alpha  !! Maybe merging would help?
-        hold += 0.5*np.einsum('kacd,kicd->ia', self.antis, T2SS)
-        # 6th term for k and c betas or k and d betas (equivalent cases, thus 2x factor)
-        hold += np.einsum('kacd,kicd->ia', self.MItwo, T2OS)
+        return T1new, res
 
-        # 7th term all alphas  !! Maybe merging would help?
-        hold -= 0.5*np.einsum('klci,klca->ia', self.antis, T2SS)
-        # 7th term k and c betas or l and c betas (eq. cases, thus 2x factor)
-        hold -= np.einsum('klci,klca->ia', self.MItwo, T2OS)
+    def Iter_T2(self, T1, T2):
 
-        # 8th term zero due cannonical HF orbitals
+        # Auxiliar (Intermediate) Arrays 
 
-        # 9th term all alphas
-        hold -= np.einsum('klci,kc,la->ia', self.antis, T1SS, T1SS)
-        # 9th term k and c betas or l and c betas (eq. cases, thus 2x factor)
-        # PRODUCT OF T1SS ALPHA AND T1SS BETA = 0????
-        #hold -= 2*np.einsum('klci,kc,la->ia', self.MItwo, T1SS, T1SS)
+        tau = T2 + np.einsum('ia,jb->ijab', T1, T1)
+        V = 2*self.MItwo - np.einsum('ijab->ijba',self.MItwo)
+        Te = 0.5*T2 + np.einsum('ia,jb->ijab', T1, T1)
 
-        # 10th term all alphas
-        hold -= np.einsum('kacd,kc,id->ia', self.antis, T1SS, T1SS)
-        # 10th term k and c betas or k and d betas (eq. cases, thus 2x factor)
-        # PRODUCT OF T1SS ALPHA AND T1SS BETA = 0????
-        #hold -= 2*np.einsum('kacd,kc,id->ia', self.MItwo, T1SS, T1SS)
-
-        # 11th term all alphas
-        hold -= np.einsum('klcd,kc,id,la->ia', self.antis, T1SS, T1SS, T1SS)
-        # PRODUCT OF T1SS ALPHA AND T1SS BETA = 0????
-       # # 11th term all betas
-       # hold -= np.einsum('klcd,kc,id,la->ia', self.antis, T1SS, T1OS, T1OS)
-       # # 11th term k and c beta and k and d beta (eq. cases, thus 2x factor)
-       # hold -= 2*np.einsum('klcd,kc,id,la->ia', self.MItwo, T1SS, T1SS, T1SS)
-       # # 11th term l and d beta and l and c beta (eq. cases, thus 2x factor)
-       # hold -= 2*np.einsum('klcd,kc,id,la->ia', self.MItwo, T1SS, T1OS, T1OS)
-
-        T1SS_out[i,a] = d[i,a]*hold
-                
+        T2new = self.MItwo
         
+        T2new += np.einsum('ijuv,ijpg->uvpg', self.MItwo, tau)
 
-    def SDT2(self, T1_init, T2_init):
-        pass
+        T2new += np.einsum('pgab,uvab->uvpg', self.MItwo, tau)
 
+        T2new += np.einsum('ijab,ijpg,uvab->uvpg', self.MItwo, tau, tau)
+
+        T2new = 0.5*T2new
+
+        T2new += np.einsum('pgua,va->uvpg', self.MItwo, T1)
+
+        T2new -= np.einsum('piuv,ig->uvpg', self.MItwo, T1)
+
+        T2new += np.einsum('ipau,viga->uvpg', V, T2)
+
+        T2new -= np.einsum('igua,ivpa->uvpg', self.MItwo, tau)
+
+        T2new -= np.einsum('ipau,viag->uvpg', self.MItwo, tau)
+
+        X = T2 - np.einsum('uipa->uiap',tau)
+
+        T2new += np.einsum('ijab,vjgb,uipa->uvpg', V, T2, X)
+
+        T2new -= np.einsum('ijab,ijgb,uvpa->uvpg', V, tau, T2)
+
+        T2new -= np.einsum('ijab,vjab,uipg->uvpg', V, tau, T2)
+
+        T2new += np.einsum('ijab,vjbg,uiap->uvpg', self.MItwo, T2, Te)
+
+        T2new += np.einsum('ijab,ujag,vibp->uvpg', self.MItwo, T2, Te)
+
+        X = np.einsum('ivpg,ja->ivjpga', T2, T1) + np.einsum('jvag,ip->ivjpga', T2, T1)
+
+        Y = np.einsum('vjag,ip->vjiagp', T2, T1) + np.einsum('viap,jg->vjiagp', T2, T1) + np.einsum('ijpg,va->vjiagp', tau, T1)
+
+        T2new -= np.einsum('ijua,ivjpga,ijua,vjiagp->uvpg', V, X, self.MItwo, Y)
+
+        X = np.einsum('uvag,ib->uviagb', T2, T1) + np.einsum('ivbg,ua->uviagb', T2, T1)
+
+        T2new += np.einsum('piab,uviagb->uvpg', V, X)
+
+        Y = np.einsum('ivgb,ua->ivugba', T2, T1) + np.einsum('iuga,vb->ivugba', T2, T1) + np.einsum('uvab,ig->ivugba', tau, T1)
+
+        T2new -= np.einsum('piab,ivugba->uvpg', self.MItwo, Y)
+
+        # Finish it up: Apply the permutation operator and divide by orbital energies [D(ijab)]
+
+        T2new = T2new + np.einsum('uvpg->vugp',T2new)
+
+        T2new = np.einsum('uvpg,uvpg->uvpg', T2new, self.D)
+
+        res = np.sum(np.abs(T2new - T2))
+
+        return T2new, res
+        
+        
     def CCSD(self, CC_CONV=6, CC_MAXITER=50):
 
         # Build auxiliar D and d  matrices for T2 and T1 amplitudes, respectivamente.
 
-        D = np.zeros([self.nbf, self.nbf, self.nbf, self.nbf])
-        d = np.zeros([self.nbf, self.nbf])
+        self.D = np.zeros([self.nbf, self.nbf, self.nbf, self.nbf])
+        self.d = np.zeros([self.nbf, self.nbf])
         for i in self.holes:
             for a in self.particles:
-                d[i,a] = 1/(self.eo[i] - self.eo[a])
+                self.d[i,a] = 1/(self.eo[i] - self.eo[a])
                 for j in self.holes:
                     for b in self.particles:
-                        D[i,j,a,b] = 1/(self.eo[i] + self.eo[j] - self.eo[a] - self.eo[b])
+                        self.D[i,j,a,b] = 1/(self.eo[i] + self.eo[j] - self.eo[a] - self.eo[b])
 
         # Compute initial guess for T1 and T2 amplitudes
 
-        T1SS = np.zeros([self.nbf, self.nbf])
-
-        T2OS = np.einsum('ijab,ijab->ijab', self.MItwo, D)
+        T1 = np.zeros([self.nbf, self.nbf])
+        T2 = np.einsum('ijab,ijab->ijab', self.MItwo, self.D)
         
         # Report the MP2 Energy from the initial guess
-        Emp2 = self.CC_Energy(T1SS, T2OS) + self.E0
+        Emp2 = self.CC_Energy(T1, T2) + self.E0
         psi4.core.print_out('CC MP2 Energy:    {:<5.10f}\n'.format(Emp2))
+        
+        ite = 1
+        T1,r1 = self.Iter_T1(T1, T2)
+        T2,r2 = self.Iter_T2(T1, T2)
+        E = self.CC_Energy(T1, T2)
+        print('-'*50)
+        print("Iteration {}".format(ite))
+        print("CC Correlation energy: {}".format(E))
+        print("T1 Residue: {}".format(r1))
+        print("T2 Residue: {}".format(r2))
+        print('-'*50)
+
+        LIM = 10**(-CC_CONV)
+
+        while r1 > LIM or r2 > LIM:
+            ite += 1
+            if ite > CC_MAXITER:
+                raise NameError("CC Equations did not converge in {} iterations".format(CC_MAXITER))
+            T1,r1 = self.Iter_T1(T1, T2)
+            T2,r2 = self.Iter_T2(T1, T2)
+            E = self.CC_Energy(T1, T2)
+            print('-'*50)
+            print("Iteration {}".format(ite))
+            print("CC Correlation energy: {}".format(E))
+            print("T1 Residue: {}".format(r1))
+            print("T2 Residue: {}".format(r2))
+            print('-'*50)
+        
+        print("\nCC Equations Converged!!!")
+        print("Final CC Energy: {}".format(E + self.E0))
