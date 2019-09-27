@@ -11,25 +11,127 @@ from tools import *
 
 ### FUNCTIONS ###
 
-def cc_energy(T2,Aoovv):
-    return (1/4)*np.einsum('ijab,ijab->',Aoovv,T2)
+def cc_energy(T2):
+    return (1/4)*np.einsum('ijab,ijab->',A[o,o,v,v],T2)
+    #return (1/4)*np.sum(A[o,o,v,v]*T2)
+
+def T2_iter(T2):
+
+    w0 = A[o,o,v,v] 
+
+    w1 = 0.5*np.einsum('klij,klab->ijab', A[o, o, o, o], T2)
+
+    w2 = 0.5*np.einsum('abcd,ijcd->ijab', A[v, v, v, v], T2)
+
+    w3 = np.einsum('kbcj,ikac->ijab', A[o, v, v, o], T2)
+
+    w3 += -w3.transpose((0,1,3,2)) - w3.transpose((1,0,2,3)) + w3.transpose((1,0,3,2))
+
+    w4 = 0.5*np.einsum('klcd,ikac,ljdb->ijab', A[o,o,v,v], T2, T2)
+
+    w4 += -w4.transpose((0,1,3,2)) - w4.transpose((1,0,2,3)) + w4.transpose((1,0,3,2))
+
+    w5 = (1/4) * np.einsum('klcd,ijcd,klab->ijab', A[o,o,v,v], T2, T2)
+
+    w6 = - 0.5*np.einsum('klcd,ijac,klbd->ijab', A[o,o,v,v], T2, T2)
+
+    w6 += w6.transpose((0,1,3,2))
+
+    w7 = - 0.5*np.einsum('klcd,ikab,jlcd->ijab', A[o,o,v,v], T2, T2)
+
+    w7 += w7.transpose((1,0,2,3))
+
+    T2new = w0 + w1 + w2 + w3 + w4 + w5 + w6 + w7
+
+    T2new *= D
+
+    res = np.sum(np.abs(T2new - T2))
+
+    return T2new, res
+
+def b_T2_iter(T2):
+
+    w0 = A[o,o,v,v] 
+    w1 = 0.5*np.einsum('abcd,ijcd->ijab', A[v, v, v, v], T2)
+    w2 = 0.5*np.einsum('klij,klab->ijab', A[o, o, o, o], T2)
+    w3 = np.einsum('akic,jkbc->ijab', A[v, o, o, v], T2)
+    w3 += -w3.transpose((0,1,3,2)) - w3.transpose((1,0,2,3)) + w3.transpose((1,0,3,2))
+    w4 = -0.5*np.einsum('klcd,ijac,klbd->ijab', A[o,o,v,v], T2, T2)
+    w4 += w4.transpose((0,1,3,2)) 
+    w5 = - 0.5*np.einsum('klcd,ikab,jlcd->ijab', A[o,o,v,v], T2, T2)
+    w5 += w5.transpose((1,0,2,3))
+    w6 = (1/4) * np.einsum('klcd,ijcd,klab->ijab', A[o,o,v,v], T2, T2)
+    w7 = - np.einsum('klcd,ikac,jlbd->ijab', A[o,o,v,v], T2, T2)
+    w7 += w7.transpose((1,0,2,3))
+
+    T2new = w0 + w1 + w2 + w3 + w4 + w5 + w6 + w7
+
+    T2new *= D
+
+    res = np.sum(np.abs(T2new - T2))
+
+    return T2new, res
+
+
+def A_T2_iter(t):
+   g = A
+   w1 = +1.   * np.einsum("akic,jkbc->ijab", g[v,o,o,v], t)
+   w2 = -1./2 * np.einsum("klcd,ijac,klbd->ijab", g[o,o,v,v], t, t)
+   w3 = -1./2 * np.einsum("klcd,ikab,jlcd->ijab", g[o,o,v,v], t, t)
+   w4 = +1.   * np.einsum("klcd,ikac,jlbd->ijab", g[o,o,v,v], t, t)
+      # update T2 amplitudes
+   T2new  = g[o,o,v,v]                                             \
+      + 1./2 * np.einsum("abcd,ijcd->ijab", g[v,v,v,v], t)         \
+      + 1./2 * np.einsum("klij,klab->ijab", g[o,o,o,o], t)         \
+      + w1.transpose((0,1,2,3)) - w1.transpose((0,1,3,2))          \
+      - w1.transpose((1,0,2,3)) + w1.transpose((1,0,3,2))          \
+      + w2.transpose((0,1,2,3)) - w2.transpose((0,1,3,2))          \
+      + w3.transpose((0,1,2,3)) - w3.transpose((1,0,2,3))          \
+      + 1./4 * np.einsum("klcd,ijcd,klab->ijab", g[o,o,v,v], t, t) \
+      + w4.transpose((0,1,2,3)) - w4.transpose((1,0,2,3))
+   T2new *= D
+
+   res = np.sum(np.abs(T2new - t))
+
+   return T2new, res
+
+def T_T2_iter(T2old):
+    w1 = +1.   * np.einsum("akic,jkbc->ijab", A[v,o,o,v], T2old)
+    w2 = -1./2 * np.einsum("klcd,ijac,klbd->ijab", A[o,o,v,v], T2old, T2old)
+    w3 = -1./2 * np.einsum("klcd,ikab,jlcd->ijab", A[o,o,v,v], T2old, T2old)
+    w4 = +1.   * np.einsum("klcd,ikac,jlbd->ijab", A[o,o,v,v], T2old, T2old)
+    # update T2old amplitudes
+    T2new  = A[o,o,v,v]                                                                                       
+    T2new = T2new + 1./2 * np.einsum("klij,klab->ijab", A[o,o,o,o], T2old)                                                 
+    T2new = T2new + 1./2 * np.einsum("abcd,ijcd->ijab", A[v,v,v,v], T2old)                                                 
+    T2new = T2new + w1.transpose((0,1,2,3)) - w1.transpose((0,1,3,2)) - w1.transpose((1,0,2,3)) + w1.transpose((1,0,3,2))  
+    T2new = T2new + w2.transpose((0,1,2,3)) - w2.transpose((0,1,3,2))                                                      
+    T2new = T2new + w3.transpose((0,1,2,3)) - w3.transpose((1,0,2,3))                                                      
+    T2new = T2new + 1./4 * np.einsum("klcd,ijcd,klab->ijab", A[o,o,v,v], T2old, T2old)                                     
+    T2new = T2new + w4.transpose((0,1,2,3)) - w4.transpose((1,0,2,3))                                                      
+
+    T2new *= D
+
+    res = np.sum(np.abs(T2new - T2old))
+
+    return T2new, res
 
 # Input Geometry    
 
-H2 = psi4.geometry("""
-    0 1
-    H 
-    H 1 0.76
-    symmetry c1
-""")
-
-#water = psi4.geometry("""
+#H2 = psi4.geometry("""
 #    0 1
-#    O
-#    H 1 0.96
-#    H 1 0.96 2 104.5
+#    H 
+#    H 1 0.76
 #    symmetry c1
 #""")
+
+water = psi4.geometry("""
+    0 1
+    O
+    H 1 0.96
+    H 1 0.96 2 104.5
+    symmetry c1
+""")
 #
 #form = psi4.geometry("""
 #0 1
@@ -50,6 +152,7 @@ psi4.core.be_quiet()
 psi4.set_options({'basis': basis,
                   'scf_type': 'pk',
                   'mp2_type': 'conv',
+                  'e_convergence' : 1e-10,
                   'freeze_core': 'false'})
 
 # Run Psi4 Energie
@@ -108,16 +211,43 @@ for i,ei in enumerate(eps[o]):
                 D[i,j,a,b] = 1/(ei + ej - ea - eb)
 print('Done. Time required: {:.5f} seconds'.format(time.time() - t))
 
-Aoovv = V[o,o,v,v] - np.einsum('ijab->ijba',V[o,o,v,v])
+#Aoovv = V[o,o,v,v] - np.einsum('ijab->ijba',V[o,o,v,v])
+
+A = V - np.einsum('ijab->ijba',V)
 
 print('\nComputing MP2 guess')
 
 t = time.time()
 
-T2 = np.einsum('ijab,ijab->ijab', Aoovv, D)
+T2 = np.einsum('ijab,ijab->ijab', A[o,o,v,v], D)
 
-Eold = cc_energy(T2, Aoovv)
+Eold = cc_energy(T2)
 
 print('MP2 Energy: {:<5.10f}     Time required: {:.5f}'.format(Eold+scf_e, time.time()-t))
+
+r2 = 1
+CC_CONV = 6
+CC_MAXITER = 50
     
+LIM = 10**(-CC_CONV)
+
+ite = 0
+
+while r2 > LIM:
+    ite += 1
+    if ite > CC_MAXITER:
+        raise NameError("CC Equations did not converge in {} iterations".format(CC_MAXITER))
+    T2,r2 = T_T2_iter(T2)
+    E = cc_energy(T2)
+    print('-'*50)
+    print("Iteration {}".format(ite))
+    print("CC Correlation energy: {}".format(E))
+    print("Total energy:          {}".format(E+scf_e))
+    print("T2 Residue:            {}".format(r2))
+    print("Max Amplitude:         {}".format(np.max(T2)))
+    print('-'*50)
+
+print("\nCC Equations Converged!!!")
+print("Final CCD Energy: {}".format(E + scf_e))
+
 
