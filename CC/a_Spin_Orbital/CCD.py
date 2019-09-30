@@ -88,7 +88,7 @@ water = psi4.geometry("""
 
 # Basis set
 
-basis = '3-21G'
+basis = 'sto-3g'
 
 # Psi4 Options
 
