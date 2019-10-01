@@ -57,22 +57,41 @@ def T2_iter(T1, T2):
     
     T2new += np.einsum('abij,ujag,vibp->uvpg', Vint[v,v,o,o], T2, Te)
     
-    X = np.einsum('ivpg,ja->ivjpga', T2, T1) + np.einsum('jvag,ip->ivjpga', T2, T1)
-    
-    Y = np.einsum('vjag,ip->vjiagp', T2, T1) + np.einsum('viap,jg->vjiagp', T2, T1) + np.einsum('ijpg,va->vjiagp', tau, T1)
-    
-    T2new -= np.einsum('uaij,ivjpga,uaij,vjiagp->uvpg', V[o,v,o,o], X, Vint[o,v,o,o], Y)
-    
-    X = np.einsum('uvag,ib->uviagb', T2, T1) + np.einsum('ivbg,ua->uviagb', T2, T1)
-    
-    T2new += np.einsum('abpi,uviagb->uvpg', V[v,v,v,o], X)
-    
-    Y = np.einsum('ivgb,ua->ivugba', T2, T1) + np.einsum('iuga,vb->ivugba', T2, T1) + np.einsum('uvab,ig->ivugba', tau, T1)
-    
-    T2new -= np.einsum('abpi,ivugba->uvpg', Vint[v,v,v,o], Y)
+    #X = np.einsum('ivpg,ja->ivjpga', T2, T1) + np.einsum('jvag,ip->ivjpga', T2, T1)
+    #
+    #Y = np.einsum('vjag,ip->vjiagp', T2, T1) + np.einsum('viap,jg->vjiagp', T2, T1) + np.einsum('ijpg,va->vjiagp', tau, T1)
+    #
+    #T2new -= np.einsum('uaij,ivjpga,uaij,vjiagp->uvpg', V[o,v,o,o], X, Vint[o,v,o,o], Y)
+    #
+    #X = np.einsum('uvag,ib->uviagb', T2, T1) + np.einsum('ivbg,ua->uviagb', T2, T1)
+    #
+    #T2new += np.einsum('abpi,uviagb->uvpg', V[v,v,v,o], X)
+    #
+    #Y = np.einsum('ivgb,ua->ivugba', T2, T1) + np.einsum('iuga,vb->ivugba', T2, T1) + np.einsum('uvab,ig->ivugba', tau, T1)
+    #
+    #T2new -= np.einsum('abpi,ivugba->uvpg', Vint[v,v,v,o], Y)
     
     # Finish it up: Apply the permutation operator and divide by orbital energies [D(ijab)]
     
+    # DEBUG
+    
+    T2new -= np.einsum('uaij,ivpg,ja,uaij,vjag,ip->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], T2, T1)
+    T2new -= np.einsum('uaij,ivpg,ja,uaij,viap,jg->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], T2, T1)
+    T2new -= np.einsum('uaij,ivpg,ja,uaij,ijpg,va->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], tau, T1)
+
+    T2new -= np.einsum('uaij,jvag,ip,uaij,vjag,ip->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], T2, T1)
+    T2new -= np.einsum('uaij,jvag,ip,uaij,viap,jg->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], T2, T1)
+    T2new -= np.einsum('uaij,jvag,ip,uaij,ijpg,va->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], tau, T1)
+
+    T2new += np.einsum('abpi,uvag,ib->uvpg', V[v,v,v,o], T2, T1)
+    T2new += np.einsum('abpi,ivbg,ua->uvpg', V[v,v,v,o], T2, T1)
+
+    T2new -= np.einsum('abpi,ivgb,ua->uvpg', Vint[v,v,v,o], T2,T1)
+    T2new -= np.einsum('abpi,iuga,vb->uvpg', Vint[v,v,v,o], T2,T1)
+    T2new -= np.einsum('abpi,uvab,ig->uvpg', Vint[v,v,v,o], tau,T1)
+
+    # END DEBUG
+
     T2new = T2new + np.einsum('uvpg->vugp',T2new)
     
     T2new = np.einsum('uvpg,uvpg->uvpg', T2new, D)
@@ -89,12 +108,20 @@ def T1_iter(T1, T2):
     
     T1new  = -np.einsum('auip,ia->up', V[v,o,o,v], T1)
     
-    Y = 2*T2 - tau.swapaxes(2,3) 
+    Y = 2*T2 - np.einsum('ujpb->ujbp', tau)
 
-    X = np.einsum('ijpb,ua->ijupba',T2,T1) + np.einsum('ujab,ip->ijupba',T2,T1) - np.einsum('ujpb,ia->ijupba', Y, T1)
+    #X = np.einsum('ijpb,ua->ijupba',T2,T1) + np.einsum('ujab,ip->ijupba',T2,T1) - np.einsum('ujpb,ia->ijupba', Y, T1)
+
+    #T1new += np.einsum('abij,ijupba->up', V[v,v,o,o], X)
     
-    T1new += np.einsum('abij,ijupba->up', V[v,v,o,o], X)
+    # No intermediate
+    # DEBUG ###
     
+    T1new += np.einsum('abij,ijpb,ua->up', V[v,v,o,o], T2, T1)
+    T1new += np.einsum('abij,ujab,ip->up', V[v,v,o,o], T2, T1)
+    T1new -= np.einsum('abij,ujpb,ia->up', V[v,v,o,o], Y, T1)
+    # END DEBUG#
+
     T1new += np.einsum('auij,ijap->up', V[v,o,o,o], tau)
     
     T1new -= np.einsum('abip,iuab->up', V[v,v,o,v], tau)
@@ -105,7 +132,51 @@ def T1_iter(T1, T2):
     
     return T1new, res
 
+def Zap_T1_iter(T1, T2):
+    tau = T2 + np.einsum('ia,jb->ijab', T1, T1)
+
+    A2l = np.einsum('uvij,ijpg->uvpg', Vint[o,o,o,o], tau)
+    B2l = np.einsum('abpg,uvab->uvpg', Vint[v,v,v,v], tau)
+    C1  = np.einsum('uaip,ia->uip', Vint[o,v,o,v], T1) #not sure here
+    C2  = np.einsum('aupi,viga->pvug', Vint[v,o,v,o], T2)
+    C2l = np.einsum('iaug,ivpa->pvug', Vint[o,v,o,v], tau)
+    D1  = np.einsum('uapi,va->uvpi', Vint[o,v,v,o], T1)
+    D2l = np.einsum('abij,uvab->uvij',Vint[v,v,o,o], tau)
+    Ds2l= np.einsum('acij,ijpb->acpb',Vint[v,v,o,o], tau)
+    D2a = np.einsum('baji,vjgb->avig', Vint[v,v,o,o], 2*T2 - T2.transpose(0,1,3,2))
+    D2b = np.einsum('baij,vjgb->avig', Vint[v,v,o,o], T2)
+    D2c = np.einsum('baij,vjbg->avig', Vint[v,v,o,o], T2)
+    Es1 = np.einsum('uvpi,ig->uvpg', Vint[o,o,v,o], T1)
+    E1  = np.einsum('uaij,va->uvij', Vint[o,v,o,o], T1)
+    E2a = np.einsum('buji,vjgb->uvig', Vint[v,o,o,o], 2*T2 - T2.transpose(0,1,3,2))
+    E2b = np.einsum('buij,vjgb->uvig', Vint[v,o,o,o], T2)
+    E2c = np.einsum('buij,vjbg->uvig', Vint[v,o,o,o], T2)
+    F11 = np.einsum('bapi,va->bvpi', Vint[v,v,v,o], T1)
+    F12 = np.einsum('baip,va->bvip', Vint[v,v,o,v], T1)
+    Fs1 = np.einsum('acpi,ib->acpb', Vint[v,v,v,o], T1)
+    F2a = np.einsum('abpi,uiab->aup', Vint[v,v,v,o], 2*T2 - T2.transpose(0,1,3,2)) #careful
+    F2l = np.einsum('abpi,uvab->uvpi', Vint[v,v,v,o], tau)
+
+    X = E1 + D2l
+    giu = np.einsum('ujij->ui', 2*X - X.transpose(0,1,3,2))
     
+    X = Fs1 - Ds2l
+    gap = np.einsum('abpb->ap', 2*X - X.transpose(1,0,2,3))
+
+    T1new = np.einsum('ui,ip->up', giu, T1)
+    T1new -= np.einsum('ap,ua->up', gap, T1)
+    T1new -= np.einsum('juai,ja,ip->up', 2*D1 - D1.transpose(3,1,2,0), T1, T1)
+    T1new -= np.einsum('auip,ia->up', 2*(D2a - D2b) + D2c, T1)
+    T1new -= np.einsum('aup->up', F2a)
+    T1new += np.einsum('uiip->up', 1.0/2.0*(E2a - E2b) + E2c)
+    T1new += np.einsum('uip->up', C1)
+    T1new -= 2*np.einsum('uipi->up', D1)
+
+    T1new = np.einsum('up,up->up', T1new, d)
+    
+    res = np.sum(np.abs(T1new - T1))
+    
+    return T1new, res
 
 # Input Geometry    
 
@@ -232,7 +303,7 @@ while r2 > LIM or r1 > LIM:
         raise NameError("CC Equations did not converge in {} iterations".format(CC_MAXITER))
     Eold = E
     t = time.time()
-    T1N, r1 = T1_iter(T1, T2)
+    T1N, r1 = Zap_T1_iter(T1, T2)
     T2,r2 = T2_iter(T1, T2)
     T1 = copy.deepcopy(T1N)
     E = cc_energy(T1, T2)
