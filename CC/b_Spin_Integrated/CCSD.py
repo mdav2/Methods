@@ -19,164 +19,78 @@ def cc_energy(T1, T2):
     E = np.einsum('abij,ijab->', Vint[v,v,o,o], X)
     return E
 
-def T2_iter(T1, T2):
+def CCSD_Iter(T1, T2, EINSUMOPT='optimal'):
 
-    tau = T2 + np.einsum('ia,jb->ijab', T1, T1)
-    V = 2*Vint - np.einsum('abij->baij', Vint)
-    Te = 0.5*T2 + np.einsum('ia,jb->ijab', T1, T1)
-    
-    T2new = copy.deepcopy(Vint[o,o,v,v])
-    
-    T2new += np.einsum('uvij,ijpg->uvpg', Vint[o,o,o,o], tau)
-    
-    T2new += np.einsum('abpg,uvab->uvpg', Vint[v,v,v,v], tau)
-    
-    T2new += np.einsum('abij,ijpg,uvab->uvpg', Vint[v,v,o,o], tau, tau)
-    
-    T2new = 0.5*T2new
-    
-    T2new += np.einsum('uapg,va->uvpg', Vint[o,v,v,v], T1)
-    
-    T2new -= np.einsum('uvpi,ig->uvpg', Vint[o,o,v,o], T1)
-    
-    T2new += np.einsum('auip,viga->uvpg', V[v,o,o,v], T2)
-    
-    T2new -= np.einsum('uaig,ivpa->uvpg', Vint[o,v,o,v], tau)
-    
-    T2new -= np.einsum('auip,viag->uvpg', Vint[v,o,o,v], tau)
-    
-    X = T2 - np.einsum('uipa->uiap',tau)
-    
-    T2new += np.einsum('abij,vjgb,uipa->uvpg', V[v,v,o,o], T2, X)
-    
-    T2new -= np.einsum('abij,ijgb,uvpa->uvpg', V[v,v,o,o], tau, T2)
-    
-    T2new -= np.einsum('abij,vjab,uipg->uvpg', V[v,v,o,o], tau, T2)
-    
-    T2new += np.einsum('abij,vjbg,uiap->uvpg', Vint[v,v,o,o], T2, Te)
-    
-    T2new += np.einsum('abij,ujag,vibp->uvpg', Vint[v,v,o,o], T2, Te)
-    
-    #X = np.einsum('ivpg,ja->ivjpga', T2, T1) + np.einsum('jvag,ip->ivjpga', T2, T1)
-    #
-    #Y = np.einsum('vjag,ip->vjiagp', T2, T1) + np.einsum('viap,jg->vjiagp', T2, T1) + np.einsum('ijpg,va->vjiagp', tau, T1)
-    #
-    #T2new -= np.einsum('uaij,ivjpga,uaij,vjiagp->uvpg', V[o,v,o,o], X, Vint[o,v,o,o], Y)
-    #
-    #X = np.einsum('uvag,ib->uviagb', T2, T1) + np.einsum('ivbg,ua->uviagb', T2, T1)
-    #
-    #T2new += np.einsum('abpi,uviagb->uvpg', V[v,v,v,o], X)
-    #
-    #Y = np.einsum('ivgb,ua->ivugba', T2, T1) + np.einsum('iuga,vb->ivugba', T2, T1) + np.einsum('uvab,ig->ivugba', tau, T1)
-    #
-    #T2new -= np.einsum('abpi,ivugba->uvpg', Vint[v,v,v,o], Y)
-    
-    # Finish it up: Apply the permutation operator and divide by orbital energies [D(ijab)]
-    
-    # DEBUG
-    
-    T2new -= np.einsum('uaij,ivpg,ja,uaij,vjag,ip->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], T2, T1)
-    T2new -= np.einsum('uaij,ivpg,ja,uaij,viap,jg->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], T2, T1)
-    T2new -= np.einsum('uaij,ivpg,ja,uaij,ijpg,va->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], tau, T1)
+    # Intermediate arrays
 
-    T2new -= np.einsum('uaij,jvag,ip,uaij,vjag,ip->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], T2, T1)
-    T2new -= np.einsum('uaij,jvag,ip,uaij,viap,jg->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], T2, T1)
-    T2new -= np.einsum('uaij,jvag,ip,uaij,ijpg,va->uvpg', V[o,v,o,o], T2, T1, Vint[o,v,o,o], tau, T1)
+    tau = T2 + np.einsum('ia,jb->ijab', T1, T1,optimize=EINSUMOPT)
+    Te = 0.5*T2 + np.einsum('ia,jb->ijab', T1, T1,optimize=EINSUMOPT)
 
-    T2new += np.einsum('abpi,uvag,ib->uvpg', V[v,v,v,o], T2, T1)
-    T2new += np.einsum('abpi,ivbg,ua->uvpg', V[v,v,v,o], T2, T1)
-
-    T2new -= np.einsum('abpi,ivgb,ua->uvpg', Vint[v,v,v,o], T2,T1)
-    T2new -= np.einsum('abpi,iuga,vb->uvpg', Vint[v,v,v,o], T2,T1)
-    T2new -= np.einsum('abpi,uvab,ig->uvpg', Vint[v,v,v,o], tau,T1)
-
-    # END DEBUG
-
-    T2new = T2new + np.einsum('uvpg->vugp',T2new)
-    
-    T2new = np.einsum('uvpg,uvpg->uvpg', T2new, D)
-    
-    res = np.sum(np.abs(T2new - T2))
-    
-    return T2new, res
-
-def T1_iter(T1, T2):
-    # Auxiliar (Intermediate) Arrays 
-    
-    tau = T2 + np.einsum('ia,jb->ijab', T1, T1)
-    V = 2*Vint - np.einsum('abij->baij', Vint)
-    
-    T1new  = -np.einsum('auip,ia->up', V[v,o,o,v], T1)
-    
-    Y = 2*T2 - np.einsum('ujpb->ujbp', tau)
-
-    #X = np.einsum('ijpb,ua->ijupba',T2,T1) + np.einsum('ujab,ip->ijupba',T2,T1) - np.einsum('ujpb,ia->ijupba', Y, T1)
-
-    #T1new += np.einsum('abij,ijupba->up', V[v,v,o,o], X)
-    
-    # No intermediate
-    # DEBUG ###
-    
-    T1new += np.einsum('abij,ijpb,ua->up', V[v,v,o,o], T2, T1)
-    T1new += np.einsum('abij,ujab,ip->up', V[v,v,o,o], T2, T1)
-    T1new -= np.einsum('abij,ujpb,ia->up', V[v,v,o,o], Y, T1)
-    # END DEBUG#
-
-    T1new += np.einsum('auij,ijap->up', V[v,o,o,o], tau)
-    
-    T1new -= np.einsum('abip,iuab->up', V[v,v,o,v], tau)
-    
-    T1new = np.einsum('up,up->up', T1new, d)
-    
-    res = np.sum(np.abs(T1new - T1))
-    
-    return T1new, res
-
-def Zap_T1_iter(T1, T2):
-    tau = T2 + np.einsum('ia,jb->ijab', T1, T1)
-
-    A2l = np.einsum('uvij,ijpg->uvpg', Vint[o,o,o,o], tau)
-    B2l = np.einsum('abpg,uvab->uvpg', Vint[v,v,v,v], tau)
-    C1  = np.einsum('uaip,ia->uip', Vint[o,v,o,v], T1) #not sure here
-    C2  = np.einsum('aupi,viga->pvug', Vint[v,o,v,o], T2)
-    C2l = np.einsum('iaug,ivpa->pvug', Vint[o,v,o,v], tau)
-    D1  = np.einsum('uapi,va->uvpi', Vint[o,v,v,o], T1)
-    D2l = np.einsum('abij,uvab->uvij',Vint[v,v,o,o], tau)
-    Ds2l= np.einsum('acij,ijpb->acpb',Vint[v,v,o,o], tau)
-    D2a = np.einsum('baji,vjgb->avig', Vint[v,v,o,o], 2*T2 - T2.transpose(0,1,3,2))
-    D2b = np.einsum('baij,vjgb->avig', Vint[v,v,o,o], T2)
-    D2c = np.einsum('baij,vjbg->avig', Vint[v,v,o,o], T2)
-    Es1 = np.einsum('uvpi,ig->uvpg', Vint[o,o,v,o], T1)
-    E1  = np.einsum('uaij,va->uvij', Vint[o,v,o,o], T1)
-    E2a = np.einsum('buji,vjgb->uvig', Vint[v,o,o,o], 2*T2 - T2.transpose(0,1,3,2))
-    E2b = np.einsum('buij,vjgb->uvig', Vint[v,o,o,o], T2)
-    E2c = np.einsum('buij,vjbg->uvig', Vint[v,o,o,o], T2)
-    F11 = np.einsum('bapi,va->bvpi', Vint[v,v,v,o], T1)
-    F12 = np.einsum('baip,va->bvip', Vint[v,v,o,v], T1)
-    Fs1 = np.einsum('acpi,ib->acpb', Vint[v,v,v,o], T1)
-    F2a = np.einsum('abpi,uiab->aup', Vint[v,v,v,o], 2*T2 - T2.transpose(0,1,3,2)) #careful
-    F2l = np.einsum('abpi,uvab->uvpi', Vint[v,v,v,o], tau)
+    A2l = np.einsum('uvij,ijpg->uvpg', Vint[o,o,o,o], tau,optimize=EINSUMOPT)
+    B2l = np.einsum('abpg,uvab->uvpg', Vint[v,v,v,v], tau,optimize=EINSUMOPT)
+    C1  = np.einsum('uaip,ia->uip', Vint[o,v,o,v], T1,optimize=EINSUMOPT) 
+    C2  = np.einsum('aupi,viga->pvug', Vint[v,o,v,o], T2,optimize=EINSUMOPT)
+    C2l = np.einsum('iaug,ivpa->pvug', Vint[o,v,o,v], tau,optimize=EINSUMOPT)
+    D1  = np.einsum('uapi,va->uvpi', Vint[o,v,v,o], T1,optimize=EINSUMOPT)
+    D2l = np.einsum('abij,uvab->uvij',Vint[v,v,o,o], tau,optimize=EINSUMOPT)
+    Ds2l= np.einsum('acij,ijpb->acpb',Vint[v,v,o,o], tau,optimize=EINSUMOPT)
+    D2a = np.einsum('baji,vjgb->avig', Vint[v,v,o,o], 2*T2 - T2.transpose(0,1,3,2),optimize=EINSUMOPT)
+    D2b = np.einsum('baij,vjgb->avig', Vint[v,v,o,o], T2,optimize=EINSUMOPT)
+    D2c = np.einsum('baij,vjbg->avig', Vint[v,v,o,o], T2,optimize=EINSUMOPT)
+    Es1 = np.einsum('uvpi,ig->uvpg', Vint[o,o,v,o], T1,optimize=EINSUMOPT)
+    E1  = np.einsum('uaij,va->uvij', Vint[o,v,o,o], T1,optimize=EINSUMOPT)
+    E2a = np.einsum('buji,vjgb->uvig', Vint[v,o,o,o], 2*T2 - T2.transpose(0,1,3,2),optimize=EINSUMOPT)
+    E2b = np.einsum('buij,vjgb->uvig', Vint[v,o,o,o], T2,optimize=EINSUMOPT)
+    E2c = np.einsum('buij,vjbg->uvig', Vint[v,o,o,o], T2,optimize=EINSUMOPT)
+    F11 = np.einsum('bapi,va->bvpi', Vint[v,v,v,o], T1,optimize=EINSUMOPT)
+    F12 = np.einsum('baip,va->bvip', Vint[v,v,o,v], T1,optimize=EINSUMOPT)
+    Fs1 = np.einsum('acpi,ib->acpb', Vint[v,v,v,o], T1,optimize=EINSUMOPT)
+    F2a = np.einsum('abpi,uiab->aup', Vint[v,v,v,o], 2*T2 - T2.transpose(0,1,3,2),optimize=EINSUMOPT) 
+    F2l = np.einsum('abpi,uvab->uvpi', Vint[v,v,v,o], tau,optimize=EINSUMOPT)
 
     X = E1 + D2l
-    giu = np.einsum('ujij->ui', 2*X - X.transpose(0,1,3,2))
+    giu = np.einsum('ujij->ui', 2*X - X.transpose(0,1,3,2),optimize=EINSUMOPT)
     
     X = Fs1 - Ds2l
-    gap = np.einsum('abpb->ap', 2*X - X.transpose(1,0,2,3))
+    gap = np.einsum('abpb->ap', 2*X - X.transpose(1,0,2,3),optimize=EINSUMOPT)
 
-    T1new = np.einsum('ui,ip->up', giu, T1)
-    T1new -= np.einsum('ap,ua->up', gap, T1)
-    T1new -= np.einsum('juai,ja,ip->up', 2*D1 - D1.transpose(3,1,2,0), T1, T1)
-    T1new -= np.einsum('auip,ia->up', 2*(D2a - D2b) + D2c, T1)
-    T1new -= np.einsum('aup->up', F2a)
-    T1new += np.einsum('uiip->up', 1.0/2.0*(E2a - E2b) + E2c)
-    T1new += np.einsum('uip->up', C1)
-    T1new -= 2*np.einsum('uipi->up', D1)
+    # T2 Amplitudes update
 
-    T1new = np.einsum('up,up->up', T1new, d)
+    J = np.einsum('ag,uvpa->uvpg', gap, T2,optimize=EINSUMOPT) - np.einsum('vi,uipg->uvpg', giu, T2,optimize=EINSUMOPT)
+
+    S = 0.5*A2l + 0.5*B2l - Es1 - (C2 + C2l - D2a - F12).transpose(2,1,0,3)  
+    S += np.einsum('avig,uipa->uvpg', (D2a-D2b), T2 - Te.transpose(0,1,3,2),optimize=EINSUMOPT)
+    S += 0.5*np.einsum('avig,uipa->uvpg', D2c, T2,optimize=EINSUMOPT)
+    S += np.einsum('auig,viap->uvpg', D2c, Te,optimize=EINSUMOPT)
+    S += np.einsum('uvij,ijpg->uvpg', 0.5*D2l + E1, tau,optimize=EINSUMOPT)
+    S -= np.einsum('uvpi,ig->uvpg', D1 + F2l, T1,optimize=EINSUMOPT)
+    S -= np.einsum('uvig,ip->uvpg',E2a - E2b - E2c.transpose(1,0,2,3), T1,optimize=EINSUMOPT)
+    S -= np.einsum('avgi,uipa->uvpg', F11, T2,optimize=EINSUMOPT)
+    S -= np.einsum('avpi,uiag->uvpg', F11, T2,optimize=EINSUMOPT)
+    S += np.einsum('avig,uipa->uvpg', F12, 2*T2 - T2.transpose(0,1,3,2),optimize=EINSUMOPT)
+
+    T2new = Vint[o,o,v,v] + J + J.transpose(1,0,3,2) + S + S.transpose(1,0,3,2)
+
+    T2new = np.einsum('uvpg,uvpg->uvpg', T2new, D,optimize=EINSUMOPT)
+
+    res2 = np.sum(np.abs(T2new - T2))
+
+    # T1 Amplitudes update
     
-    res = np.sum(np.abs(T1new - T1))
+    T1new = np.einsum('ui,ip->up', giu, T1,optimize=EINSUMOPT)
+    T1new -= np.einsum('ap,ua->up', gap, T1,optimize=EINSUMOPT)
+    T1new -= np.einsum('juai,ja,ip->up', 2*D1 - D1.transpose(3,1,2,0), T1, T1,optimize=EINSUMOPT)
+    T1new -= np.einsum('auip,ia->up', 2*(D2a - D2b) + D2c, T1,optimize=EINSUMOPT)
+    T1new -= np.einsum('aup->up', F2a,optimize=EINSUMOPT)
+    T1new += np.einsum('uiip->up', 1.0/2.0*(E2a - E2b) + E2c,optimize=EINSUMOPT)
+    T1new += np.einsum('uip->up', C1,optimize=EINSUMOPT)
+    T1new -= 2*np.einsum('uipi->up', D1,optimize=EINSUMOPT)
+
+    T1new = np.einsum('up,up->up', T1new, d,optimize=EINSUMOPT)
     
-    return T1new, res
+    res1 = np.sum(np.abs(T1new - T1))
+
+    return T1new, T2new, res1, res2
 
 # Input Geometry    
 
@@ -187,14 +101,27 @@ def Zap_T1_iter(T1, T2):
 #    symmetry c1
 #""")
 
-water = psi4.geometry("""
+#water = psi4.geometry("""
+#    0 1
+#    O
+#    H 1 0.96
+#    H 1 0.96 2 104.5
+#    symmetry c1
+#""")
+
+ethane = psi4.geometry("""
     0 1
-    O
-    H 1 0.96
-    H 1 0.96 2 104.5
+    C       -3.4240009952      1.7825072183      0.0000001072                 
+    C       -1.9048206760      1.7825072100     -0.0000000703                 
+    H       -3.8005812586      0.9031676785      0.5638263076                 
+    H       -3.8005814434      1.7338892156     -1.0434433083                 
+    H       -3.8005812617      2.7104647651      0.4796174543                 
+    H       -1.5282404125      0.8545496587     -0.4796174110                 
+    H       -1.5282402277      1.8311252186      1.0434433449                 
+    H       -1.5282404094      2.6618467448     -0.5638262767  
     symmetry c1
 """)
-#
+
 #form = psi4.geometry("""
 #0 1
 #O
@@ -206,7 +133,7 @@ water = psi4.geometry("""
 
 # Basis set
 
-basis = '3-21g'
+basis = 'cc-pvtz'
 
 # Psi4 Options
 
@@ -291,7 +218,7 @@ print('MP2 Energy: {:<5.10f}     Time required: {:.5f}'.format(E+scf_e, time.tim
 r1 = 0
 r2 = 1
 CC_CONV = 6
-CC_MAXITER = 20
+CC_MAXITER = 30
     
 LIM = 10**(-CC_CONV)
 
@@ -303,9 +230,7 @@ while r2 > LIM or r1 > LIM:
         raise NameError("CC Equations did not converge in {} iterations".format(CC_MAXITER))
     Eold = E
     t = time.time()
-    T1N, r1 = Zap_T1_iter(T1, T2)
-    T2,r2 = T2_iter(T1, T2)
-    T1 = copy.deepcopy(T1N)
+    T1, T2, r1, r2 = CCSD_Iter(T1, T2)
     E = cc_energy(T1, T2)
     dE = E - Eold
     print('-'*50)
@@ -320,7 +245,8 @@ while r2 > LIM or r1 > LIM:
     print('-'*50)
 
 print("\nCC Equations Converged!!!")
-print("Final CCD Energy: {}".format(E + scf_e))
+print("Final CCSD Energy:     {:<5.10f}".format(E + scf_e))
+print('CCSD Energy from Psi4: {:<5.10f}'.format(p4_ccsd))
 print("Total Computation time:        {}".format(time.time() - tinit))
 
 
