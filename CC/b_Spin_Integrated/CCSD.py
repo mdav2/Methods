@@ -57,11 +57,9 @@ def T2_iter(T1, T2):
     
     T2new += np.einsum('abij,ujag,vibp->uvpg', Vint[v,v,o,o], T2, Te)
     
-    #X = np.einsum('ivpg,ja->ivjpga', T2, T1) + np.einsum('jvag,ip->ivjpga', T2, T1)
-    X = np.einsum('ivpg,ja->ivjpga', T2, T1) + np.einsum('jvag,ip->jviagp', T2, T1)
+    X = np.einsum('ivpg,ja->ivjpga', T2, T1) + np.einsum('jvag,ip->ivjpga', T2, T1)
     
-    #Y = np.einsum('vjag,ip->vjiagp', T2, T1) + np.einsum('viap,jg->vjiagp', T2, T1) + np.einsum('ijpg,va->vjiagp', tau, T1)
-    Y = np.einsum('vjag,ip->vjiagp', T2, T1) + np.einsum('viap,jg->vijapg', T2, T1) + np.einsum('ijpg,va->ijvpga', tau, T1)
+    Y = np.einsum('vjag,ip->vjiagp', T2, T1) + np.einsum('viap,jg->vjiagp', T2, T1) + np.einsum('ijpg,va->vjiagp', tau, T1)
     
     T2new -= np.einsum('uaij,ivjpga,uaij,vjiagp->uvpg', V[o,v,o,o], X, Vint[o,v,o,o], Y)
     
