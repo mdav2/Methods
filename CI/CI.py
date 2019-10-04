@@ -13,9 +13,9 @@ file_dir = os.path.dirname('../HF/RHF/')
 sys.path.append(file_dir)
 
 from tools import *
-from fock import *
+from fock_old import *
 from rhf import RHF
-from Hamiltonian import *
+from Hamil_old import *
 
 class CI:
     
@@ -178,6 +178,7 @@ class CI:
 
         print("Generating Hamiltonian Matrix")
         H = get_H(self.determinants, self.MIone, self.MItwo, v = True, t = True)
+        print(H[0])
 
         # DIAGONALIZE HAMILTONIAN MATRIX
 

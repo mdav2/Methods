@@ -1,5 +1,6 @@
 from tools import *
 from fock import *
+from rhf import RHF
 import numpy as np
 import timeit
 
@@ -125,16 +126,43 @@ def Htwo(bra1, bra2, molint):
             
 # Function: Compute Htwo and Hone at same time
 
-def Htot(det1, det2, molint1, molint2):
-    dif = det1 - det2
+def Htot(bra1, bra2, molint1, molint2):
+    dif = bra1 - bra2
 
-    if dif > 4:
-        return 0
+    if dif == 0:
+        phase = bra1.p * bra2.p
+        alphas = bra1.occ[0]
+        betas = bra1.occ[1]
+        one = np.einsum('mm,m->', molint1, alphas) + np.einsum('mm,m->', molint1, betas)
+    
+        # Compute J for all combinations of m n being alpha or beta
+        x1 = np.einsum('mmnn, m, n', molint2, alphas, alphas)
+        x2 = np.einsum('mmnn, m, n', molint2, betas, betas)
+        x3 = np.einsum('mmnn, m, n', molint2, alphas, betas)
+        x4 = np.einsum('mmnn, m, n', molint2, betas, alphas)
+        J = x1 + x2 + x3 + x4
+        # For K m and n have to have the same spin, thus only two cases are considered
+        x1 = np.einsum('mnnm, m, n', molint2, alphas, alphas)
+        x2 = np.einsum('mnnm, m, n', molint2, betas, betas)
+        K = x1 + x2
+        return phase * (0.5 * (J - K) + one)
+
+    elif dif == 2:
+        # Use notin to return a list of [orbital, spin] that are present in the first bra, but not in the second
+        [o1, s1] = bra1.notin(bra2)[0]
+        [o2, s2] = bra2.notin(bra1)[0]
+        if s1 != s2:  # Check if the different orbitals have same spin
+            return 0
+        phase = bra1.an(o1, s1).cr(o2, s2).p * bra2.p # Annihilating o1 and creating o2 generates the same phase as moving o1 to the o2 position
+        # For J, (mp|nn), n can have any spin. Two cases are considered then. Obs: bra1.occ or bra2.occ would yield the same result. When n = m or p J - K = 0
+        J = np.einsum('nn, n->', molint2[o1,o2], bra1.occ[0]) + np.einsum('nn, n->', molint2[o1,o2], bra1.occ[1]) 
+        K = np.einsum('nn, n->', molint2.swapaxes(1,3)[o1,o2], bra1.occ[s1])
+        return phase * (molint1[o1,o2] + J - K)
 
     elif dif == 4:
-        phase = det1.phase(det2)
-        [[o1, s1], [o2, s2]] = det1.Exclusive(det2)
-        [[o3, s3], [o4, s4]] = det2.Exclusive(det1)
+        [[o1, s1], [o2, s2]] = bra1.notin(bra2)
+        [[o3, s3], [o4, s4]] = bra2.notin(bra1)
+        phase = bra1.an(o1, s1).cr(o3, s3).an(o2, s2).cr(o4, s4).p * bra2.p
         if s1 == s3 and s2 == s4:
             J = molint2[o1, o3, o2, o4] 
         else:
@@ -144,40 +172,8 @@ def Htot(det1, det2, molint1, molint2):
         else:
             K = 0
         return phase * (J - K)
-
-    elif dif == 2:
-        # Use Exclusive to return a list of [orbital, spin] that are present in the first det, but not in the second
-        [o1, s1] = det1.Exclusive(det2)[0]
-        [o2, s2] = det2.Exclusive(det1)[0]
-        if s1 != s2:  # Check if the different orbitals have same spin
-            return 0
-        phase = det1.phase(det2)
-        #phase = det1.an(o1, s1).cr(o2, s2).p * det2.p # Annihilating o1 and creating o2 generates the same phase as moving o1 to the o2 position
-        # For J, (mp|nn), n can have any spin. Two cases are considered then. Obs: det1.occ or det2.occ would yield the same result. When n = m or p J - K = 0
-        J = np.einsum('nn, n->', molint2[o1,o2], det1.alpha_list()) + np.einsum('nn, n->', molint2[o1,o2], det1.alpha_list()) 
-        if s1 == 0:
-            K = np.einsum('nn, n->', molint2.swapaxes(1,3)[o1,o2], det1.alpha_list())
-        else:
-            K = np.einsum('nn, n->', molint2.swapaxes(1,3)[o1,o2], det1.beta_list())
-        return phase * (molint1[o1,o2] + J - K)
-
-    if dif == 0:
-        alphas = det1.alpha_list()
-        betas = det1.beta_list()
-        one = np.einsum('mm,m->', molint1, alphas) + np.einsum('mm,m->', molint1, betas)
-    
-        # Compute J for all combinations of m n being alpha or beta
-        x1 = np.einsum('mmnn, m, n', molint2, alphas, alphas, optimize = 'optimal')
-        x2 = np.einsum('mmnn, m, n', molint2, betas, betas, optimize = 'optimal')
-        x3 = np.einsum('mmnn, m, n', molint2, alphas, betas, optimize = 'optimal')
-        x4 = np.einsum('mmnn, m, n', molint2, betas, alphas, optimize = 'optimal')
-        J = x1 + x2 + x3 + x4
-        # For K m and n have to have the same spin, thus only two cases are considered
-        x1 = np.einsum('mnnm, m, n', molint2, alphas, alphas, optimize = 'optimal')
-        x2 = np.einsum('mnnm, m, n', molint2, betas, betas, optimize = 'optimal')
-        K = x1 + x2
-        return 0.5 * (J - K) + one
-
+    else:
+        return 0
 
 # FUNCTION: Given a list of determinants, compute the Hamiltonian matrix
 
