@@ -177,8 +177,7 @@ class CI:
         # COMPUTE HAMILTONIAN MATRIX
 
         print("Generating Hamiltonian Matrix")
-        H = get_H(self.determinants, self.MIone, self.MItwo, v = True, t = True)
-        print(H[0])
+        H = get_H(self.determinants, self.MIone, self.MItwo, v = False, t = True)
 
         # DIAGONALIZE HAMILTONIAN MATRIX
 
@@ -193,4 +192,13 @@ class CI:
         self.Ecas = E[0] + self.V_nuc
         print(self.Ecas)
         psi4.core.print_out("\nCAS Energy: {:<15.10f} ".format(self.Ecas) + emoji('whale'))
+
+        #DEBUG
+        #oc = np.array([1]*self.ndocc + [0]*self.virtual)
+        #self.ref = Bra([oc, oc])
+        #for de in self.determinants:
+        #    if de - self.ref == 4:
+        #        x=(Htot(self.ref, de, self.MIone, self.MItwo))
+        #        if abs(x) > 1e-9:
+        #            Htot(self.ref, de, self.MIone, self.MItwo,debug=True)
         return self.Ecas

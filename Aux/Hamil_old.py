@@ -98,6 +98,9 @@ def Htwo(bra1, bra2, molint):
 
     elif dif == 2:
         # Use notin to return a list of [orbital, spin] that are present in the first bra, but not in the second
+        print('--det beg---')
+        print(bra2)
+        print(bra2)
         [o1, s1] = bra1.notin(bra2)[0]
         [o2, s2] = bra2.notin(bra1)[0]
         if s1 != s2:  # Check if the different orbitals have same spin
@@ -126,7 +129,7 @@ def Htwo(bra1, bra2, molint):
             
 # Function: Compute Htwo and Hone at same time
 
-def Htot(bra1, bra2, molint1, molint2):
+def Htot(bra1, bra2, molint1, molint2,debug=False):
     dif = bra1 - bra2
 
     if dif == 0:
@@ -149,20 +152,28 @@ def Htot(bra1, bra2, molint1, molint2):
 
     elif dif == 2:
         # Use notin to return a list of [orbital, spin] that are present in the first bra, but not in the second
+        #print('--det beg---')
+        #print(bra1)
+        #print(bra2)
         [o1, s1] = bra1.notin(bra2)[0]
         [o2, s2] = bra2.notin(bra1)[0]
         if s1 != s2:  # Check if the different orbitals have same spin
             return 0
         phase = bra1.an(o1, s1).cr(o2, s2).p * bra2.p # Annihilating o1 and creating o2 generates the same phase as moving o1 to the o2 position
+        #print("Phase: {}".format(phase))
+        #print("h :    {:<2.3f}".format(molint1[o1,o2]))
         # For J, (mp|nn), n can have any spin. Two cases are considered then. Obs: bra1.occ or bra2.occ would yield the same result. When n = m or p J - K = 0
         J = np.einsum('nn, n->', molint2[o1,o2], bra1.occ[0]) + np.einsum('nn, n->', molint2[o1,o2], bra1.occ[1]) 
+        #print("J :    {:<2.3f}".format(J))
         K = np.einsum('nn, n->', molint2.swapaxes(1,3)[o1,o2], bra1.occ[s1])
+        #print("K :    {:<2.3f}".format(K))
         return phase * (molint1[o1,o2] + J - K)
 
     elif dif == 4:
         [[o1, s1], [o2, s2]] = bra1.notin(bra2)
         [[o3, s3], [o4, s4]] = bra2.notin(bra1)
         phase = bra1.an(o1, s1).cr(o3, s3).an(o2, s2).cr(o4, s4).p * bra2.p
+        if debug: print(phase)
         if s1 == s3 and s2 == s4:
             J = molint2[o1, o3, o2, o4] 
         else:

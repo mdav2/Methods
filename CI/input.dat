@@ -12,18 +12,18 @@ sys.path.append(file_dir)
 
 from tools import *
 
-#molecule mol {
-#    0 1
-#    O
-#    H 1 0.96
-#    H 1 0.96 2 104.5
-#}
-
 molecule mol {
     0 1
-    H
-    H 1 0.76
+    O
+    H 1 0.96
+    H 1 0.96 2 104.5
 }
+
+#molecule mol {
+#    0 1
+#    H 
+#    F 1 1.0
+#}
 
 set {
     BASIS         3-21g
@@ -46,5 +46,5 @@ rhf = RHF(mol, mints)
 psi4.core.print_out('Psi4 RHF Energy:  {:<5.10f}\n'.format(psiE))
 
 ci = CI(rhf)
-ci.compute_CAS('aaaa')
+ci.compute_CAS('oooaaaaaaauuu')
 #ci.compute_CISD()

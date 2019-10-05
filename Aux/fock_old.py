@@ -15,8 +15,7 @@ class Bra:
 # Printing a bra will return its alpha and beta strings
 
     def __str__(self):
-        out = 'Phase: {} \n'.format(self.p)
-        out += 'Alpha:'
+        out = 'Alpha:'
         for a in self.occ[0]:
             out += ' {}'.format(a)
         out += '\n'    
