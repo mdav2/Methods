@@ -13,6 +13,7 @@ file_dir = os.path.dirname('../')
 sys.path.append(file_dir)
 
 from fock import *
+from tools import *
 from Hamiltonian import *
 
 def List2Str(lista):
@@ -87,8 +88,10 @@ class CI:
 
         print("Generating excitations")
         perms = set(permutations(active))
-        print("Generating determinants")
+
         self.determinants = []
+        progress = 0
+        file = sys.stdout
         for p1 in perms:
             for p2 in perms:
                 alpha = space.copy()
@@ -97,19 +100,23 @@ class CI:
                     alpha[x] = p1[i]
                     beta[x] = p2[i]
                 self.determinants.append(Det(a=List2Str(alpha), b=List2Str(beta)))
+            progress += 1
+            showout(progress, len(perms), 50, "Generating Determinants: ", file)
+        file.write('\n')
+        file.flush()
         print("Number of determinants: {}".format(len(self.determinants)))
 
         # COMPUTE HAMILTONIAN MATRIX
 
-        print("Generating Hamiltonian Matrix")
-        H = get_H(self.determinants, self.h, self.Vint, v = False, t = True)
+        #print("Generating Hamiltonian Matrix")
+        H = get_H(self.determinants, self.h, self.Vint, v = True, t = True)
 
         # DIAGONALIZE HAMILTONIAN MATRIX
 
         print("Diagonalizing Hamiltonian Matrix")
-        t0 = timeit.default_timer()
+        t0 = time.time()
         E, Ccas = la.eigh(H)
-        tf = timeit.default_timer()
+        tf = time.time()
         print("Completed. Time needed: {}".format(tf - t0))
         print("CAS Electronic Energy:")
         self.E = E[0]
@@ -132,12 +139,12 @@ if __name__ == '__main__':
         
     # Input Geometry    
     
-    mol = psi4.geometry("""
-        0 1
-        F 
-        H 1 1.0
-        symmetry c1
-    """)
+    #mol = psi4.geometry("""
+    #    0 1
+    #    F 
+    #    H 1 1.0
+    #    symmetry c1
+    #""")
 
     #mol = psi4.geometry("""
     #    0 1
@@ -146,13 +153,13 @@ if __name__ == '__main__':
     #    symmetry c1
     #""")
     
-    #mol = psi4.geometry("""
-    #    0 1
-    #    O
-    #    H 1 0.96
-    #    H 1 0.96 2 104.5
-    #    symmetry c1
-    #""")
+    mol = psi4.geometry("""
+        0 1
+        O
+        H 1 0.96
+        H 1 0.96 2 104.5
+        symmetry c1
+    """)
     
     #ethane = psi4.geometry("""
     #    0 1
@@ -195,7 +202,7 @@ if __name__ == '__main__':
     CAS = CI(wfn)
     Enuc = mol.nuclear_repulsion_energy()
     
-    Ecas = CAS.compute_CAS('full')
+    Ecas = CAS.compute_CAS('aaaaaaaaauuuu')
     print("\nCAS Energy: {:<15.10f} ".format(Ecas+Enuc) + emoji('whale'))
     print("Time required: {} seconds.".format(time.time()-t))
 

@@ -1,7 +1,8 @@
 from tools import *
 from fock import *
 import numpy as np
-import timeit
+import time
+import sys
 
 def H_dif0(det1, molint1, molint2):
     alphas = det1.alpha_list()
@@ -63,27 +64,23 @@ def H_dif2(det1, det2, molint1, molint2):
 def get_H(dets, molint1, molint2, v = False, t = False):
         l = len(dets)
         H = np.zeros((l,l))
-        t0 = timeit.default_timer()
-        prog = 0
+        t0 = time.time()
+        file = sys.stdout
         for i,d1 in enumerate(dets):
             H[i,i] = H_dif0(d1, molint1, molint2)
             for j,d2 in enumerate(dets):
                 if j >= i:
                     break
                 dif = d1 - d2
-                if dif > 4:
-                    H[i,j] = 0.0
-                    H[j,i] = 0.0
-                elif dif == 4:
+                if dif == 4:
                     H[i,j] = H_dif4(d1, d2, molint1, molint2)
                     H[j,i] = H[i,j]
-                else:
+                elif dif == 2:
                     H[i,j] = H_dif2(d1, d2, molint1, molint2)
                     H[j,i] = H[i,j]
-            prog += 1
-            if v:
-                print("Progress: {:2.0f}%".format((prog/l)*100))
-        tf = timeit.default_timer()
+            if v: showout(i+1, l, 50, "Generating Hamiltonian Matrix: ", file)
+        file.write('\n')
+        file.flush()
         if t:
-            print("Completed. Time needed: {}".format(tf - t0))
+            print("Completed. Time needed: {}".format(time.time() - t0))
         return H
