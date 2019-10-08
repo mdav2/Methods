@@ -233,7 +233,7 @@ class TCCSD:
 
         # Build the Auxiliar Matrix D
 
-        print('\n----------------- RUNNING CCD ------------------')
+        print('\n----------------- RUNNING CCSD ------------------')
         
         print('\nBuilding Auxiliar D matrix...')
         t = time.time()
@@ -321,8 +321,8 @@ class TCCSD:
 
         # Singles
 
-        for i in range(self.ndocc):
-            for a in range(self.nvir):
+        for i in CAS_holes:
+            for a in CAS_particles:
                 search = self.ref.copy()
                 search.rmv_alpha(i)
                 search.add_alpha(a+self.ndocc)
@@ -331,10 +331,10 @@ class TCCSD:
 
         # Doubles
 
-        for i in range(self.ndocc):
-            for a in range(self.nvir):
-                for j in range(self.ndocc):
-                    for b in range(self.nvir):
+        for i in CAS_holes:
+            for a in CAS_particles:
+                for j in CAS_holes:
+                    for b in CAS_particles:
                         search = self.ref.copy()
                         search.rmv_alpha(i)
                         search.add_alpha(a+self.ndocc)
@@ -349,12 +349,81 @@ class TCCSD:
 
         self.external_T1 = self.external_T1/C0
 
-        for i in range(self.ndocc):
-            for j in range(self.ndocc):
-                for a in range(self.nvir):
-                    for b in range(self.nvir):
+        for i in CAS_holes:
+            for j in CAS_holes:
+                for a in CAS_particles:
+                    for b in CAS_particles:
                         self.external_T2[i,j,a,b] = self.external_T2[i,j,a,b]/C0 - \
                         (self.external_T1[i,a]*self.external_T1[j,b] - self.external_T1[j,a]*self.external_T1[i,b])
+        
+       # Compute CCSD 
+
+        print('------- TAILORED COUPLED CLUSTER STARTED -------\n')
+
+        # Slices
+        
+        o = slice(0, self.ndocc)
+        v = slice(self.ndocc, self.nbf)
+
+        # START CCSD CODE
+
+        # Build the Auxiliar Matrix D
+
+        print('Building Auxiliar D matrix...\n')
+        print(self.eps)
+        print(CAS_holes)
+        print(CAS_particles)
+        t = time.time()
+        self.D  = np.zeros([self.ndocc, self.ndocc, self.nvir, self.nvir])
+        self.d  = np.zeros([self.ndocc, self.nvir])
+        for i,ei in enumerate(self.eps[o]):
+            if i in CAS_holes: continue
+            for j,ej in enumerate(self.eps[o]):
+                if j in CAS_holes: continue
+                for a,ea in enumerate(self.eps[v]):
+                    if a in CAS_particles: continue
+                    self.d[i,a] = 1/(ea - ei)
+                    for b,eb in enumerate(self.eps[v]):
+                        if b in CAS_particles: continue
+                        self.D[i,j,a,b] = 1/(ei + ej - ea - eb)
+        
+        print('Done. Time required: {:.5f} seconds'.format(time.time() - t))
+        
+        #t = time.time()
+        #
+        #self.T1 = np.zeros([self.ndocc, self.nvir])
+        #self.T2 = np.einsum('abij,ijab->ijab', self.Vint[v,v,o,o], self.D)
+        #self.cc_energy()
+        #
+        #
+        #self.r1 = 1
+        #self.r2 = 1
+        #    
+        #LIM = 10**(-CC_CONV)
+        #ite = 0
+        #
+        #while self.r2 > LIM or self.r1 > LIM:
+        #    ite += 1
+        #    if ite > CC_MAXITER:
+        #        raise NameError("CC Equations did not converge in {} iterations".format(CC_MAXITER))
+        #    Eold = self.Ecc
+        #    t = time.time()
+        #    self.T1_T2_Update()
+        #    self.cc_energy()
+        #    dE = self.Ecc - Eold
+        #    print('-'*50)
+        #    print("Iteration {}".format(ite))
+        #    print("CC Correlation energy: {}".format(self.Ecc))
+        #    print("Energy change:         {}".format(dE))
+        #    print("T1 Residue:            {}".format(self.r1))
+        #    print("T2 Residue:            {}".format(self.r2))
+        #    print("Time required:         {}".format(time.time() - t))
+        #    print('-'*50)
+        #
+        #print("\nCC Equations Converged!!!")
+        #print("Final CCSD Energy:     {:<5.10f}".format(self.Ecc + self.Escf))
+        #if psi4_compare: print('CCSD Energy from Psi4: {:<5.10f}'.format(p4_ccsd))
+        #print("Total Computation time:        {}".format(time.time() - tinit))
 
         
         
