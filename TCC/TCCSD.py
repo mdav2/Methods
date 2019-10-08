@@ -389,41 +389,48 @@ class TCCSD:
         
         print('Done. Time required: {:.5f} seconds'.format(time.time() - t))
         
-        #t = time.time()
-        #
-        #self.T1 = np.zeros([self.ndocc, self.nvir])
-        #self.T2 = np.einsum('abij,ijab->ijab', self.Vint[v,v,o,o], self.D)
-        #self.cc_energy()
-        #
-        #
-        #self.r1 = 1
-        #self.r2 = 1
-        #    
-        #LIM = 10**(-CC_CONV)
-        #ite = 0
-        #
-        #while self.r2 > LIM or self.r1 > LIM:
-        #    ite += 1
-        #    if ite > CC_MAXITER:
-        #        raise NameError("CC Equations did not converge in {} iterations".format(CC_MAXITER))
-        #    Eold = self.Ecc
-        #    t = time.time()
-        #    self.T1_T2_Update()
-        #    self.cc_energy()
-        #    dE = self.Ecc - Eold
-        #    print('-'*50)
-        #    print("Iteration {}".format(ite))
-        #    print("CC Correlation energy: {}".format(self.Ecc))
-        #    print("Energy change:         {}".format(dE))
-        #    print("T1 Residue:            {}".format(self.r1))
-        #    print("T2 Residue:            {}".format(self.r2))
-        #    print("Time required:         {}".format(time.time() - t))
-        #    print('-'*50)
-        #
-        #print("\nCC Equations Converged!!!")
-        #print("Final CCSD Energy:     {:<5.10f}".format(self.Ecc + self.Escf))
-        #if psi4_compare: print('CCSD Energy from Psi4: {:<5.10f}'.format(p4_ccsd))
-        #print("Total Computation time:        {}".format(time.time() - tinit))
+        t = time.time()
+        
+        self.T1 = np.zeros([self.ndocc, self.nvir])
+        self.T2  = np.zeros([self.ndocc, self.ndocc, self.nvir, self.nvir])
+        
+        for i in CAS_holes:
+            for a in CAS_particles:
+                self.T1[i,a] = self.external_T1[i,j,a,b]
+                for j in CAS_holes:
+                    for b in CAS_particles:
+                        self.T2[i,j,a,b] = self.external_T2[i,j,a,b]
+        
+        self.cc_energy()
+
+        self.r1 = 1
+        self.r2 = 1
+            
+        LIM = 10**(-CC_CONV)
+        ite = 0
+        
+        while self.r2 > LIM or self.r1 > LIM:
+            ite += 1
+            if ite > CC_MAXITER:
+                raise NameError("CC Equations did not converge in {} iterations".format(CC_MAXITER))
+            Eold = self.Ecc
+            t = time.time()
+            self.T1_T2_Update()
+            self.cc_energy()
+            dE = self.Ecc - Eold
+            print('-'*50)
+            print("Iteration {}".format(ite))
+            print("CC Correlation energy: {}".format(self.Ecc))
+            print("Energy change:         {}".format(dE))
+            print("T1 Residue:            {}".format(self.r1))
+            print("T2 Residue:            {}".format(self.r2))
+            print("Time required:         {}".format(time.time() - t))
+            print('-'*50)
+        
+        print("\nCC Equations Converged!!!")
+        print("Final CCSD Energy:     {:<5.10f}".format(self.Ecc + self.Escf))
+        if psi4_compare: print('CCSD Energy from Psi4: {:<5.10f}'.format(p4_ccsd))
+        print("Total Computation time:        {}".format(time.time() - tinit))
 
         
         
