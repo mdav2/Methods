@@ -1,0 +1,32 @@
+import os
+import sys
+from TCCSD import *
+
+#molecule mol {
+#    0 1
+#    O
+#    H 1 0.96
+#    H 1 0.96 2 104.5
+#    symmetry c1
+#}
+
+molecule mol {
+    0 1
+    H
+    H 1 0.76
+    symmetry c1
+}
+
+set {
+    BASIS         6-31g
+    SCF_TYPE      pk
+    E_CONVERGENCE 12
+    MAXITER       50
+}
+
+X = TCCSD(mol)
+
+X.CCSD(CC_CONV=8,psi4_compare=True)
+
+X.TCCSD('full')
+
