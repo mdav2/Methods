@@ -20,9 +20,11 @@ class Det:
         
         # Create a string representation of the determinant. Mostly used for debugging 
 
-        out = 'Alpha: ' + np.binary_repr(self.alpha, width=self.nmo)[::-1]
+        out = '---------------\n'
+        out += 'Alpha: ' + np.binary_repr(self.alpha, width=self.nmo)[::-1]
         out += '\n'    
         out += 'Beta:  ' + np.binary_repr(self.beta, width=self.nmo)[::-1]
+        out += '\n---------------'
         return out
 
     def alpha_list(self):
@@ -175,3 +177,36 @@ class Det:
             return self.sign_dif4(another)
         else:
             return 0
+
+    def sign_del_alpha(self, orb):
+    
+        # Determine the sign needed to delete the orbital 'orb' i.e. the sign when you apply an annihilation operator on this Det
+
+        i = 1
+        count = 0
+
+        while i < (1 << orb):
+            if self.alpha & i:
+                count += 1
+            i = i << 1
+
+        return (-1)**count
+            
+    def sign_del_beta(self, orb):
+    
+        # Determine the sign needed to delete the orbital 'orb' i.e. the sign when you apply an annihilation operator on this Det
+
+        i = 1
+        count = self.alpha_list().sum()
+
+        while i < (1 << orb):
+            if self.beta & i:
+                count += 1
+            i = i << 1
+
+        return (-1)**count
+            
+        
+
+        
+

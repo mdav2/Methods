@@ -14,6 +14,8 @@ from tools import *
 from fock import *
 from Hamiltonian import *
 
+np.set_printoptions(suppress=True)
+
 class TCCSD:
 
     def __init__(self, mol):
@@ -287,7 +289,17 @@ class TCCSD:
         if psi4_compare: print('CCSD Energy from Psi4: {:<5.10f}'.format(p4_ccsd))
         print("Total Computation time:        {}".format(time.time() - tinit))
 
-    def TCCSD(self, active_space=''):
+
+    def clean_internal_space(self):
+
+        for i in self.CAS_holes:
+            for a in self.CAS_particles:
+                self.T1[i,a] = self.internal_T1[i,a]
+                for j in self.CAS_holes:
+                    for b in self.CAS_particles:
+                        self.T2[i,j,a,b] = self.internal_T2[i,j,a,b]
+
+    def TCCSD(self, active_space='', CC_CONV=6, CC_MAXITER=50):
         
         # Compute CAS
         print('------- COMPLETE ACTIVE SPACE CONFIGURATION INTERACTION STARTED -------\n')
@@ -300,61 +312,84 @@ class TCCSD:
 
         print('Collecting C1 and C2 coefficients...\n')
 
+        C0 = self.Ccas[self.determinants.index(self.ref)]
+
+        if abs(C0) < 0.1:
+            raise NameError('Leading Coefficient too small C0 = {}'.format(C0))
         # Determine indexes for the CAS space
 
-        CAS_holes = []
+        self.CAS_holes = []
         for i,x in enumerate(active_space[0:self.ndocc]):
             if x == 'a':
-                CAS_holes.append(i)
+                self.CAS_holes.append(i)
 
-        CAS_particles = []
+        self.CAS_particles = []
         for i,x in enumerate(active_space[self.ndocc:]):
             if x == 'a':
-                CAS_particles.append(i)
+                self.CAS_particles.append(i)
 
-        self.external_T1 = np.zeros([self.ndocc, self.nvir])
-        self.external_T2 = np.zeros([self.ndocc, self.ndocc, self.nvir, self.nvir])
-
-        C0 = self.Ccas[self.determinants.index(self.ref)]
+        self.internal_T1 = np.zeros([self.ndocc, self.nvir])
+        self.internal_T2 = np.zeros([self.ndocc, self.ndocc, self.nvir, self.nvir])
 
         # Search for the appropriate coefficients using a model Determinant
 
         # Singles
 
-        for i in CAS_holes:
-            for a in CAS_particles:
+        for i in self.CAS_holes:
+            for a in self.CAS_particles:
                 search = self.ref.copy()
+            
+                # anh -> i
+                p = search.sign_del_alpha(i)
                 search.rmv_alpha(i)
+
+                # cre -> a
+                p *= search.sign_del_alpha(a+self.ndocc)
                 search.add_alpha(a+self.ndocc)
+
                 index = self.determinants.index(search)
-                self.external_T1[i,a] = self.Ccas[index]
+                # The phase guarentees that the determinant in the CI framework is the same as the one created in the CC framework
+                self.internal_T1[i,a] = self.Ccas[index]*p
 
         # Doubles
 
-        for i in CAS_holes:
-            for a in CAS_particles:
-                for j in CAS_holes:
-                    for b in CAS_particles:
+        for i in self.CAS_holes:
+            for a in self.CAS_particles:
+                for j in self.CAS_holes:
+                    for b in self.CAS_particles:
                         search = self.ref.copy()
-                        search.rmv_alpha(i)
-                        search.add_alpha(a+self.ndocc)
+                        p = 1
+                        # anh -> j
+                        p *= search.sign_del_beta(j)
                         search.rmv_beta(j)
-                        search.add_beta(b+self.ndocc)
+
+                        # cre -> b
+                        p *= search.sign_del_beta(b + self.ndocc)
+                        search.add_beta(b + self.ndocc)
+
+                        # anh -> i
+                        p *= search.sign_del_alpha(i)
+                        search.rmv_alpha(i)
+
+                        # cre -> a
+                        p *= search.sign_del_alpha(a + self.ndocc)
+                        search.add_alpha(a + self.ndocc)
+
                         index = self.determinants.index(search)
-                        self.external_T2[i,j,a,b] = self.Ccas[index]
+                        # The phase guarentees that the determinant in the CI framework is the same as the one created in the CC framework
+                        self.internal_T2[i,j,a,b] = self.Ccas[index]*p
 
         # Translate CI coefficients into CC amplitudes
 
         print('Translating CI coefficients into CC amplitudes...\n')
 
-        self.external_T1 = self.external_T1/C0
+        self.internal_T1 = self.internal_T1/C0
 
-        for i in CAS_holes:
-            for j in CAS_holes:
-                for a in CAS_particles:
-                    for b in CAS_particles:
-                        self.external_T2[i,j,a,b] = self.external_T2[i,j,a,b]/C0 - \
-                        (self.external_T1[i,a]*self.external_T1[j,b] - self.external_T1[j,a]*self.external_T1[i,b])
+        for i in self.CAS_holes:
+            for j in self.CAS_holes:
+                for a in self.CAS_particles:
+                    for b in self.CAS_particles:
+                        self.internal_T2[i,j,a,b] = self.internal_T2[i,j,a,b]/C0 - self.internal_T1[i,a]*self.internal_T1[j,b]
         
        # Compute CCSD 
 
@@ -370,67 +405,63 @@ class TCCSD:
         # Build the Auxiliar Matrix D
 
         print('Building Auxiliar D matrix...\n')
-        print(self.eps)
-        print(CAS_holes)
-        print(CAS_particles)
         t = time.time()
         self.D  = np.zeros([self.ndocc, self.ndocc, self.nvir, self.nvir])
         self.d  = np.zeros([self.ndocc, self.nvir])
         for i,ei in enumerate(self.eps[o]):
-            if i in CAS_holes: continue
+            if i in self.CAS_holes: continue
             for j,ej in enumerate(self.eps[o]):
-                if j in CAS_holes: continue
+                if j in self.CAS_holes: continue
                 for a,ea in enumerate(self.eps[v]):
-                    if a in CAS_particles: continue
+                    if a in self.CAS_particles: continue
                     self.d[i,a] = 1/(ea - ei)
                     for b,eb in enumerate(self.eps[v]):
-                        if b in CAS_particles: continue
+                        if b in self.CAS_particles: continue
                         self.D[i,j,a,b] = 1/(ei + ej - ea - eb)
         
         print('Done. Time required: {:.5f} seconds'.format(time.time() - t))
-        
         t = time.time()
         
+        # Generate initial T1 and T2 amplitudes
+
         self.T1 = np.zeros([self.ndocc, self.nvir])
         self.T2  = np.zeros([self.ndocc, self.ndocc, self.nvir, self.nvir])
         
-        for i in CAS_holes:
-            for a in CAS_particles:
-                self.T1[i,a] = self.external_T1[i,j,a,b]
-                for j in CAS_holes:
-                    for b in CAS_particles:
-                        self.T2[i,j,a,b] = self.external_T2[i,j,a,b]
-        
+        self.clean_internal_space()
+
+
         self.cc_energy()
 
-        self.r1 = 1
-        self.r2 = 1
-            
-        LIM = 10**(-CC_CONV)
-        ite = 0
-        
-        while self.r2 > LIM or self.r1 > LIM:
-            ite += 1
-            if ite > CC_MAXITER:
-                raise NameError("CC Equations did not converge in {} iterations".format(CC_MAXITER))
-            Eold = self.Ecc
-            t = time.time()
-            self.T1_T2_Update()
-            self.cc_energy()
-            dE = self.Ecc - Eold
-            print('-'*50)
-            print("Iteration {}".format(ite))
-            print("CC Correlation energy: {}".format(self.Ecc))
-            print("Energy change:         {}".format(dE))
-            print("T1 Residue:            {}".format(self.r1))
-            print("T2 Residue:            {}".format(self.r2))
-            print("Time required:         {}".format(time.time() - t))
-            print('-'*50)
-        
-        print("\nCC Equations Converged!!!")
-        print("Final CCSD Energy:     {:<5.10f}".format(self.Ecc + self.Escf))
-        if psi4_compare: print('CCSD Energy from Psi4: {:<5.10f}'.format(p4_ccsd))
-        print("Total Computation time:        {}".format(time.time() - tinit))
+        print('CC Energy from CAS Amplitudes: {:<5.10f}'.format(self.Ecc+self.Escf))
+
+        #self.r1 = 1
+        #self.r2 = 1
+        #    
+        #LIM = 10**(-CC_CONV)
+        #ite = 0
+        #
+        #while self.r2 > LIM or self.r1 > LIM:
+        #    ite += 1
+        #    if ite > CC_MAXITER:
+        #        raise NameError("CC Equations did not converge in {} iterations".format(CC_MAXITER))
+        #    Eold = self.Ecc
+        #    t = time.time()
+        #    self.T1_T2_Update()
+        #    self.cc_energy()
+        #    dE = self.Ecc - Eold
+        #    print('-'*50)
+        #    print("Iteration {}".format(ite))
+        #    print("CC Correlation energy: {}".format(self.Ecc))
+        #    print("Energy change:         {}".format(dE))
+        #    print("T1 Residue:            {}".format(self.r1))
+        #    print("T2 Residue:            {}".format(self.r2))
+        #    print("Time required:         {}".format(time.time() - t))
+        #    print('-'*50)
+        #
+        #print("\nCC Equations Converged!!!")
+        #print("Final CCSD Energy:     {:<5.10f}".format(self.Ecc + self.Escf))
+        #if psi4_compare: print('CCSD Energy from Psi4: {:<5.10f}'.format(p4_ccsd))
+        #print("Total Computation time:        {}".format(time.time() - tinit))
 
         
         

@@ -2,23 +2,24 @@ import os
 import sys
 from TCCSD import *
 
-molecule mol {
-    0 1
-    O
-    H 1 0.96
-    H 1 0.96 2 104.5
-    symmetry c1
-}
-
 #molecule mol {
-#    0 1
-#    H
-#    H 1 0.76
+#    -2 1
+#    O
+#    H 1 0.96
+#    H 1 0.96 2 104.5
 #    symmetry c1
 #}
 
+molecule mol {
+    0 1
+    He
+    Be 1 0.8
+    He 1 0.8 2 105
+    symmetry c1
+}
+
 set {
-    BASIS         3-21g
+    BASIS         sto-3g
     SCF_TYPE      pk
     E_CONVERGENCE 12
     MAXITER       50
@@ -26,7 +27,7 @@ set {
 
 X = TCCSD(mol)
 
-X.CCSD(CC_CONV=8,psi4_compare=True)
 
-X.TCCSD('oooaaaauuuuuu')
+X.CCSD()
+X.TCCSD('full')
 
