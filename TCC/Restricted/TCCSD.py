@@ -256,7 +256,6 @@ class TCCSD:
                     active_space += 'a'
                 else:
                     active_space += hf_string[i]
-            print(active_space)
 
         # none is none
 
@@ -279,7 +278,7 @@ class TCCSD:
         C0 = self.Ccas[self.determinants.index(self.ref)]
 
         if abs(C0) < 0.1:
-            raise NameError('Leading Coefficient too small C0 = {}'.format(C0))
+            raise NameError('Leading Coefficient too small C0 = {}\n Restricted orbitals not appropriate.'.format(C0))
         # Determine indexes for the CAS space
 
         self.CAS_holes = []
