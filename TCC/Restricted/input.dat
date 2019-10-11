@@ -30,14 +30,13 @@ tcc66 = []
 
 ratios = np.array(range(7,31,1))/10.0
 
-ratios = ratios[::-1]
 
 for r in ratios:
     Re = 1.809*r
     mol = geometry(temp.format(Re, Re))
     
-#    eccsd.append(energy(0))
-#    eccsd_t.append(energy(0))
+    eccsd.append(energy('ccsd'))
+    eccsd_t.append(energy('ccsd(t)'))
 
     X = TCCSD(mol)
 

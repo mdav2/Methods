@@ -12,7 +12,7 @@ sys.path.append(file_dir)
 
 from tools import *
 from fock import *
-from Hamiltonian import *
+from U_Hamiltonian import *
 
 np.set_printoptions(suppress=True)
 
@@ -20,34 +20,77 @@ class TCCSD:
 
     def __init__(self, mol):
 
-        # Run SCF information 
+        # Run SCF
 
         self.Escf, wfn = psi4.energy('scf', return_wfn = True)
-        self.nelec = wfn.nalpha() + wfn.nbeta()
-        self.C = wfn.Ca()
-        self.ndocc = wfn.doccpi()[0]
-        self.nmo = wfn.nmo()
-        self.nvir = self.nmo - self.ndocc
-        self.eps = np.asarray(wfn.epsilon_a())
-        self.nbf = self.C.shape[0]
+        self.neleca = wfn.nalpha()
+        self.nelecb = wfn.nbeta()
+        self.nelec = self.neleca + self.nelecb
+        self.Ca = wfn.Ca()
+        self.Cb = wfn.Cb()
+        self.ndocc = wfn.doccpi()[0] # Is this meaningfull?
+        self.nbf = self.Ca.shape[0]
+        self.naso = self.Ca.shape[0] 
+        self.nbso = self.Cb.shape[0]
+        self.navir = self.naso - self.neleca
+        self.nbvir = self.nbso - self.nelecb
+        self.epsa = np.asarray(wfn.epsilon_a())
+        self.epsb = np.asarray(wfn.epsilon_b())
         self.Vnuc = mol.nuclear_repulsion_energy()
         
-        print("Number of Electrons:            {}".format(self.nelec))
         print("Number of Basis Functions:      {}".format(self.nbf))
-        print("Number of Molecular Orbitals:   {}".format(self.nmo))
-        print("Number of Doubly ocuppied MOs:  {}\n".format(self.ndocc))
-    
-        # Get Integrals.
-    
-        print("Converting atomic integrals to MO integrals...")
+        print("Number of Alpha Electrons:      {}".format(self.neleca))
+        print("Number of Beta Electrons:       {}".format(self.nelecb))
+        print("Number of Alpha Spin-Orbitals:  {}".format(self.naso))
+        print("Number of Beta Spin-Orbitals:   {}".format(self.nbso))
+
+        # Get Integrals
+        
+        print("Creating Antisymmetrized MO Integrals")
+        
         t = time.time()
         mints = psi4.core.MintsHelper(wfn.basisset())
-        self.Vint = np.asarray(mints.mo_eri(self.C, self.C, self.C, self.C))
-        self.Vint = self.Vint.swapaxes(1,2) # Convert to Physicists' notation
-        self.h = np.asarray(mints.ao_kinetic()) + np.asarray(mints.ao_potential())
-        self.h = np.einsum('up,vq,uv->pq', self.C, self.C, self.h)
-        print("Completed in {} seconds!".format(time.time()-t))
 
+        # One-electron integrals
+        self.ha = np.asarray(mints.ao_kinetic()) + np.asarray(mints.ao_potential())
+        self.hb = np.einsum('up,vq,uv->pq', self.Cb, self.Cb, self.ha)
+        self.ha = np.einsum('up,vq,uv->pq', self.Ca, self.Ca, self.ha)
+        
+        # Two-electron integrals 
+
+        print("AA|AA")
+        self.Vaaaa = np.asarray(mints.mo_eri(self.Ca, self.Ca, self.Ca, self.Ca))
+        self.Vaaaa = self.Vaaaa - self.Vaaaa.transpose(0,3,2,1)
+        # Physicist's Notation
+        self.Vaaaa = self.Vaaaa.transpose(0,2,1,3)
+        
+        print("BB|BB")
+        self.Vbbbb = np.asarray(mints.mo_eri(self.Cb, self.Cb, self.Cb, self.Cb))
+        self.Vbbbb = self.Vbbbb - self.Vbbbb.transpose(0,3,2,1)
+        # Physicist's Notation
+        self.Vbbbb = self.Vbbbb.transpose(0,2,1,3)
+        
+        print("AB|AB")
+        self.Vabab = np.asarray(mints.mo_eri(self.Ca, self.Ca, self.Cb, self.Cb))
+        # Physicist's Notation
+        self.Vabab = self.Vabab.transpose(0,2,1,3)
+        
+        print("AB|BA")
+        self.Vabba = (-1)*np.asarray(mints.mo_eri(self.Ca, self.Ca, self.Cb, self.Cb))
+        # Physicist's Notation
+        self.Vabba = self.Vabba.transpose(0,2,3,1)
+        
+        print("BA|BA")
+        self.Vbaba = np.asarray(mints.mo_eri(self.Cb, self.Cb, self.Ca, self.Ca))
+        # Physicist's Notation
+        self.Vbaba = self.Vbaba.transpose(0,2,1,3)
+        
+        print("BA|AB")
+        self.Vbaab = (-1)*np.asarray(mints.mo_eri(self.Cb, self.Cb, self.Ca, self.Ca))
+        # Physicist's Notation
+        self.Vbaab = self.Vbaab.transpose(0,2,3,1)
+        
+        print("Completed in {} seconds!".format(time.time()-t))
     
     def CAS(self, active_space='', show_prog = False):
 
@@ -61,16 +104,21 @@ class TCCSD:
 
         template_space = ''
         n_ac_orb = 0
-        n_ac_elec_pair = int(self.nelec/2)
+        alpha_active = self.neleca
+        beta_active =  self.nelecb
+
         print("Reading Active space")
         if active_space == 'full':
-            active_space = 'a'*self.nmo
+            active_space = 'a'*self.nbf
+
         if len(active_space) != self.nbf:
             raise NameError("Invalid active space format. Please check the number of basis functions.")
+
         for i in active_space:
             if i == 'o':
                 template_space += '1'
-                n_ac_elec_pair -= 1
+                alpha_active -= 1
+                beta_active  -= 1
             elif i == 'a':
                 template_space += '{}'
                 n_ac_orb += 1
@@ -79,21 +127,23 @@ class TCCSD:
             else:
                 raise NameError("Invalid active space entry: {}".format(i))
 
-        if n_ac_elec_pair < 0:
-                raise NameError("Negative number of active electrons")
+        if alpha_active < 0 or beta_active < 0:
+            raise NameError("Negative number of active electrons")
 
         # Produce a reference determinant
 
-        self.ref = Det(a = ('1'*self.ndocc + '0'*self.nvir), \
-                       b = ('1'*self.ndocc + '0'*self.nvir))
+        self.ref = Det(a = ('1'*self.neleca + '0'*self.navir), \
+                       b = ('1'*self.nelecb + '0'*self.nbvir))
 
-        print("Number of active orbitals: {}".format(n_ac_orb))
-        print("Number of active electrons: {}\n".format(2*n_ac_elec_pair))
+        print("Number of active orbitals:        {}".format(n_ac_orb))
+        print("Number of active alpha electrons: {}".format(alpha_active))
+        print("Number of active beta electrons:  {}".format(beta_active))
 
         # Use permutations to generate strings that will represent excited determinants
 
-        print("Generating excitations...")
-        perms = set(permutations('1'*n_ac_elec_pair + '0'*(n_ac_orb - n_ac_elec_pair)))
+        print("\nGenerating excitations...")
+        perm_a = set(permutations('1'*alpha_active + '0'*(n_ac_orb - alpha_active)))
+        perm_b = set(permutations('1'*beta_active  + '0'*(n_ac_orb - beta_active)))
         print("Done.\n")
 
         # Use the strings to generate Det objects 
@@ -101,12 +151,12 @@ class TCCSD:
         self.determinants = []
         progress = 0
         file = sys.stdout
-        for p1 in perms:
-            for p2 in perms:
+        for p1 in perm_a:
+            for p2 in perm_b:
                 self.determinants.append(Det(a=template_space.format(*p1), \
                                              b=template_space.format(*p2)))
             progress += 1
-            showout(progress, len(perms), 50, "Generating Determinants: ", file)
+            showout(progress, len(perm_a), 50, "Generating Determinants: ", file)
         file.write('\n')
         file.flush()
         print("Number of determinants: {}".format(len(self.determinants)))
@@ -114,7 +164,9 @@ class TCCSD:
         # Construct the Hamiltonian Matrix
         # Note: Input for two electron integral must be using Chemists' notation
 
-        H = get_H(self.determinants, self.h, self.Vint.swapaxes(1,2), v = True, t = True)
+        H = get_H(self.determinants, ha = self.ha, hb = self.hb, Vaaaa=self.Vaaaa, \
+                  Vbbbb=self.Vbbbb, Vabab=self.Vabab, Vabba=self.Vabba, Vbaba=self.Vbaba, \
+                  Vbaab=self.Vbaab, v = True, t = True)
 
         # Diagonalize the Hamiltonian Matrix
 

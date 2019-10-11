@@ -6,7 +6,7 @@ import sys
 import time
 from itertools import permutations
 
-file_dir = os.path.dirname('../Aux/')
+file_dir = os.path.dirname('../../Aux/')
 sys.path.append(file_dir)
 
 from fock import *
@@ -74,6 +74,9 @@ class CI:
             else:
                 raise NameError("Invalid active space entry: {}".format(i))
 
+        if n_ac_elec_pair < 0:
+                raise NameError("Negative number of active electrons")
+
         self.ref = Det(a = ('1'*self.ndocc + '0'*self.nvir), \
                        b = ('1'*self.ndocc + '0'*self.nvir))
         print("Number of active orbitals: {}".format(n_ac_orb))
@@ -120,12 +123,12 @@ if __name__ == '__main__':
         
     # Input Geometry    
     
-    #mol = psi4.geometry("""
-    #    0 1
-    #    F 
-    #    H 1 1.0
-    #    symmetry c1
-    #""")
+    mol = psi4.geometry("""
+        0 1
+        F 
+        H 1 1.0
+        symmetry c1
+    """)
 
     #mol = psi4.geometry("""
     #    0 1
@@ -134,13 +137,13 @@ if __name__ == '__main__':
     #    symmetry c1
     #""")
     
-    mol = psi4.geometry("""
-        0 1
-        O
-        H 1 0.96
-        H 1 0.96 2 104.5
-        symmetry c1
-    """)
+    #mol = psi4.geometry("""
+    #    0 1
+    #    O
+    #    H 1 0.96
+    #    H 1 0.96 2 104.5
+    #    symmetry c1
+    #""")
     
     #ethane = psi4.geometry("""
     #    0 1
@@ -166,7 +169,7 @@ if __name__ == '__main__':
     
     # Basis set
     
-    basis = '3-21g'
+    basis = 'sto-3g'
     
     # Psi4 Options
     
@@ -183,7 +186,7 @@ if __name__ == '__main__':
     CAS = CI(wfn)
     Enuc = mol.nuclear_repulsion_energy()
     
-    Ecas = CAS.compute_CAS('aaaaaaauuuuuu')
+    Ecas = CAS.compute_CAS('aaaaaa')
     print("\nCAS Energy: {:<15.10f} ".format(Ecas+Enuc) + emoji('whale'))
     print("Time required: {} seconds.".format(time.time()-t))
 
