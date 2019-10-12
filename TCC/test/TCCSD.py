@@ -194,11 +194,6 @@ class TCCSD:
     
         T2new = self.Vint[o,o,v,v] + J + J.transpose(1,0,3,2) + S + S.transpose(1,0,3,2)
     
-        T2new = np.einsum('uvpg,uvpg->uvpg', T2new, self.D,optimize=EINSUMOPT)
-
-    
-        #self.r2 = np.sum(np.abs(T2new - self.T2)) #- np.sum(np.abs(self.internal_T2))
-    
         # T1 Amplitudes update
         
         T1new =    np.einsum('ui,ip->up',      giu, self.T1,                                   optimize=EINSUMOPT)
@@ -209,22 +204,14 @@ class TCCSD:
         T1new +=   np.einsum('uiip->up',       1.0/2.0*(E2a - E2b) + E2c,                      optimize=EINSUMOPT)
         T1new +=   np.einsum('uip->up',        C1,                                             optimize=EINSUMOPT)
         T1new -= 2*np.einsum('uipi->up',       D1,                                             optimize=EINSUMOPT)
-    
-        T1new = np.einsum('up,up->up', T1new, self.d, optimize=EINSUMOPT)
         
-        T1old = copy.deepcopy(self.T1)
-        self.T1 = T1new
-    
-        T2old = copy.deepcopy(self.T2)
-        self.T2 = T2new
+        T1new = np.einsum('up,up->up', T1new, self.d, optimize=EINSUMOPT) + self.internal_T1
+        T2new = np.einsum('uvpg,uvpg->uvpg', T2new, self.D, optimize=EINSUMOPT) + self.internal_T2
 
-        self.clean_internal_space()
+        self.r1 = np.sum(np.abs(T1new - self.T1)) 
+        self.r2 = np.sum(np.abs(T2new - self.T2)) 
 
-        #self.r1 = np.sum(np.abs(T1new - self.T1)) #- np.sum(np.abs(self.internal_T1))
-        self.r1 = np.sum(np.abs(T1old - self.T1)) 
-        self.r2 = np.sum(np.abs(T2old - self.T2)) 
-    
-        #self.T1, self.T2 = T1new, T2new
+        self.T1, self.T2 = T1new, T2new
 
     def clean_internal_space(self):
 
@@ -242,6 +229,17 @@ class TCCSD:
                 for j in self.CAS_holes:
                     for b in self.CAS_particles:
                         self.T2[i,j,a,b] = 0
+
+    def check_internal_space(self):
+        for i in self.CAS_holes:
+            for a in self.CAS_particles:
+                if self.T1[i,a] != self.internal_T1[i,a]:
+                    return False
+                for j in self.CAS_holes:
+                    for b in self.CAS_particles:
+                        if self.T2[i,j,a,b] != self.internal_T2[i,j,a,b]:
+                            return False
+        return True
 
     def TCCSD(self, active_space='', CC_CONV=6, CC_MAXITER=50):
         
@@ -374,16 +372,7 @@ class TCCSD:
         t = time.time()
         self.D  = np.zeros([self.ndocc, self.ndocc, self.nvir, self.nvir])
         self.d  = np.zeros([self.ndocc, self.nvir])
-        #for i,ei in enumerate(self.eps[o]):
-        #    for j,ej in enumerate(self.eps[o]):
-        #        for a,ea in enumerate(self.eps[v]):
-        #            if i in self.CAS_holes and a in self.CAS_particles: continue
-        #            self.d[i,a] = 1/(ea - ei)
-        #            for b,eb in enumerate(self.eps[v]):
-        #                if i in self.CAS_holes and a in self.CAS_particles \
-        #                and j in self.CAS_holes and b in self.CAS_particles: continue
-        #                self.D[i,j,a,b] = 1/(ei + ej - ea - eb)
-        
+
         for i,ei in enumerate(self.eps[o]):
             for j,ej in enumerate(self.eps[o]):
                 for a,ea in enumerate(self.eps[v]):
@@ -391,6 +380,13 @@ class TCCSD:
                     for b,eb in enumerate(self.eps[v]):
                         self.D[i,j,a,b] = 1/(ei + ej - ea - eb)
 
+        for i in self.CAS_holes:
+            for j in self.CAS_holes:
+                for a in self.CAS_particles:
+                    self.d[i,a] = 0.0
+                    for b in self.CAS_particles:
+                          self.D[i,j,a,b] = 0.0
+        
         print('Done. Time required: {:.5f} seconds'.format(time.time() - t))
         t = time.time()
         
@@ -429,6 +425,12 @@ class TCCSD:
             print("Time required:         {}".format(time.time() - t))
             print('-'*50)
         
+        if self.check_internal_space():
+            print('Internal space not compromised') 
+        else:
+            print('Houston we have a problem')
+
+        self.cc_energy()
         self.Ecc = self.Ecc + self.Escf
 
         print("\nTCC Equations Converged!!!")
