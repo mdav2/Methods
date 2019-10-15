@@ -15,6 +15,7 @@ temp = """
 set {
     BASIS         cc-pvdz
     REFERENCE     RHF
+    SCF_TYPE      PK
     SOSCF         True
     E_CONVERGENCE 8
     MAXITER       100
@@ -25,7 +26,8 @@ set {
 e = []
 ecas = []
 
-ratios = np.array(range(7,38,1))/10.0
+#ratios = np.array(range(7,38,1))/10.0
+ratios = [1]
 
 line = '{:<2.2f}   {:<5.10f}   {:<5.10f}'
 
