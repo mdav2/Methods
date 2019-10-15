@@ -337,12 +337,19 @@ class HTCCSD:
 
         # Triples. Two cases are going to be considered: aaa -> aaa, abb -> abb
 
+        # First Case: aaa -> aaa
+
         for i in self.CAS_holes:
             for a in self.CAS_particles:
                 for j in self.CAS_holes:
                     for b in self.CAS_particles:
                         for k in self.CAS_holes:
                             for c in self.CAS_particles:
+                                # Since all index are alphas they cannot be the same
+                                if i == j or i == k or j == k:
+                                    continue
+                                if a == b or b == c or a == c:
+                                    continue
                                 search = self.ref.copy()
                                 p = 1
                                 # anh (k) cre(c) anh(j) cre(b) anh(i) cre(a)
@@ -367,6 +374,15 @@ class HTCCSD:
                                 index = self.determinants.index(search)
                                 self.CAS_T3aaa[i,j,k,a,b,c] = self.Ccas[index]*p
 
+        for i in self.CAS_holes:
+            for a in self.CAS_particles:
+                for j in self.CAS_holes:
+                    for b in self.CAS_particles:
+                        for k in self.CAS_holes:
+                            for c in self.CAS_particles:
+                                # Since ik and ac are alphas, they cannot be the same
+                                if i == k or a == c:
+                                    continue
                                 search = self.ref.copy()
                                 p = 1
                                 # anh (k) cre(c) anh(j) cre(b) anh(i) cre(a)
@@ -388,7 +404,6 @@ class HTCCSD:
                                 p *= search.sign_del_alpha(a + self.ndocc)
                                 search.add_alpha(a + self.ndocc)
 
-                                print(search)
                                 index = self.determinants.index(search)
                                 self.CAS_T3aba[i,j,k,a,b,c] = self.Ccas[index]*p
 
@@ -400,38 +415,70 @@ class HTCCSD:
         self.CAS_T1 = self.CAS_T1/C0
 
         # Doubles
-        for i in self.CAS_holes:
-            for j in self.CAS_holes:
-                for a in self.CAS_particles:
-                    for b in self.CAS_particles:
-                        self.CAS_T2[i,j,a,b] = self.CAS_T2[i,j,a,b]/C0 - self.CAS_T1[i,a]*self.CAS_T1[j,b]
+        self.CAS_T2 = self.CAS_T2/C0
+        self.CAS_T2 -= np.einsum('ia,jb-> ijab', self.CAS_T1, self.CAS_T1)
 
         # Triples
-        for i in self.CAS_holes:
-            for a in self.CAS_particles:
-                for j in self.CAS_holes:
-                    for b in self.CAS_particles:
-                        for k in self.CAS_holes:
-                            for c in self.CAS_particles:
-                                self.CAS_T3aaa[i,j,k,a,b,c] = self.CAS_T3aaa[i,j,k,a,b,c]/C0      \
-                                - self.CAS_T1[i,a]*(self.CAS_T2[j,k,b,c] - self.CAS_T2[k,j,b,c])  \
-                                + self.CAS_T1[j,a]*(self.CAS_T2[i,k,b,c] - self.CAS_T2[k,i,b,c])  \
-                                + self.CAS_T1[k,a]*(self.CAS_T2[i,j,b,c] - self.CAS_T2[j,i,b,c])  \
-                                - self.CAS_T1[i,a]*self.CAS_T1[j,b]*self.CAS_T1[k,c]              \
-                                + self.CAS_T1[i,a]*self.CAS_T1[k,b]*self.CAS_T1[j,c]              \
-                                + self.CAS_T1[j,a]*self.CAS_T1[i,b]*self.CAS_T1[k,c]              \
-                                - self.CAS_T1[j,a]*self.CAS_T1[k,b]*self.CAS_T1[i,c]              \
-                                - self.CAS_T1[k,a]*self.CAS_T1[i,b]*self.CAS_T1[j,c]              \
-                                + self.CAS_T1[k,a]*self.CAS_T1[j,b]*self.CAS_T1[i,c]  
+        # First case aaa -> aaa
+        self.CAS_T3aaa = self.CAS_T3aaa/C0
 
-                                self.CAS_T3aba[i,j,k,a,b,c] = self.CAS_T3aba[i,j,k,a,b,c]/C0      \
-                                - self.CAS_T1[i,a]*(self.CAS_T2[j,k,b,c])                         \
-                                - self.CAS_T1[k,a]*(self.CAS_T2[j,i,b,c])                         \
-                                - self.CAS_T1[i,a]*self.CAS_T1[j,b]*self.CAS_T1[k,c]              \
-                                + self.CAS_T1[k,a]*self.CAS_T1[j,b]*self.CAS_T1[i,c]  
+        X = self.CAS_T2 - self.CAS_T2.transpose(1,0,2,3)
+        X = np.einsum('ia, jkbc -> ijkabc', self.CAS_T1, X)
+
+        X =   + np.einsum('ijkabc -> ijkabc',X)  - np.einsum('ijkabc -> ijkbac', X) + np.einsum('ijkabc -> ijkcab', X) \
+              - np.einsum('ijkabc -> jikabc', X) + np.einsum('ijkabc -> jikbac', X) - np.einsum('ijkabc -> jikcab', X) \
+              + np.einsum('ijkabc -> kijabc', X) - np.einsum('ijkabc -> kijbac', X) + np.einsum('ijkabc -> kijcab', X) 
+
+        Y = np.einsum('ia,jb,kc->ijkabc', self.CAS_T1, self.CAS_T1, self.CAS_T1)
+
+        Y = + np.einsum('ijkabc -> ijkabc', Y) - np.einsum('ijkabc -> ijkacb', Y) \
+            - np.einsum('ijkabc -> ijkbac', Y) + np.einsum('ijkabc -> ijkbca', Y) \
+            + np.einsum('ijkabc -> ijkcab', Y) - np.einsum('ijkabc -> ijkcba', Y) 
+
+        self.CAS_T3aaa = self.CAS_T3aaa - X - Y
+
+        # Second case aba -> aba
+
+        self.CAS_T3aba = self.CAS_T3aba/C0
+
+        self.CAS_T3aba -= + np.einsum('ia,kjcb -> ijkabc', self.CAS_T1, self.CAS_T2) \
+                          - np.einsum('ic,kjab -> ijkabc', self.CAS_T1, self.CAS_T2) \
+                          - np.einsum('ka,ijcb -> ijkabc', self.CAS_T1, self.CAS_T2) \
+                          + np.einsum('kc,ijab -> ijkabc', self.CAS_T1, self.CAS_T2) \
+                          + np.einsum('jb,ikac -> ijkabc', self.CAS_T1, self.CAS_T2) \
+                          - np.einsum('jb,kiac -> ijkabc', self.CAS_T1, self.CAS_T2) \
+
+        self.CAS_T3aba -= + np.einsum('ia,jb,kc -> ijkabc', self.CAS_T1, self.CAS_T1, self.CAS_T1) \
+                          - np.einsum('ic,jb,ka -> ijkabc', self.CAS_T1, self.CAS_T1, self.CAS_T1) \
+                             
+        for i in range(self.ndocc):
+            for j in range(self.ndocc):
+                    for a in range(self.nvir):
+                        for b in range(self.nvir):
+                                x = self.CAS_T2[i,j,a,b]
+                                if abs(x) > 1e-6:
+                                    print('{}a {}b -> {}a {}b {:<5.6f}'.format(i+1,j+1,1+a+self.ndocc,1+b+self.ndocc,x))
+        print('\n')
+        for i in range(self.ndocc):
+            for j in range(self.ndocc):
+                for k in range(self.ndocc):
+                    for a in range(self.nvir):
+                        for b in range(self.nvir):
+                            for c in range(self.nvir):
+                                x = self.CAS_T3aba[i,j,k,a,b,c]
+                                if abs(x) > 1e-6:
+                                    print('{}a {}b {}a -> {}a {}b {}a  {:< 5.6f}'.format(i+1,j+1,k+1,1+a+self.ndocc,1+b+self.ndocc,1+c+self.ndocc,x))
+                                    #print('X: {} Y {}'.format(X[i,j,k,a,b,c], Y[i,j,k,a,b,c]))
         
-        print(self.CAS_T3aba)
-        
+
+        self.T2 = self.CAS_T2
+        self.T1 = self.CAS_T1
+        self.cc_energy()
+        print('\n')
+        print(self.Ecas)
+        print(self.Ecc + self.Escf)
+
+
 #       # Compute CCSD 
 #
 #        print('------- TAILORED COUPLED CLUSTER STARTED -------\n')
