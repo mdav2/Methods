@@ -4,6 +4,7 @@ import scipy.linalg as la
 import os
 import sys
 import timeit
+import copy
 
 file_dir = os.path.dirname('../Aux/')
 sys.path.append(file_dir)
@@ -89,7 +90,7 @@ class CC:
         V = 2*self.MItwo - np.einsum('ijab->ijba',self.MItwo)
         Te = 0.5*T2 + np.einsum('ia,jb->ijab', T1, T1)
 
-        T2new = self.MItwo
+        T2new = copy.deepcopy(self.MItwo)
         
         T2new += np.einsum('ijuv,ijpg->uvpg', self.MItwo, tau)
 
